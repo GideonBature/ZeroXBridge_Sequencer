@@ -131,6 +131,8 @@ cargo run
 
 ## **🤝 How to Contribute**  
 
+### Before applying for any of our issues, we'd appreciate if you could star our repo! This helps boost our project visibility and makes it easier for you to find us in your GitHub stars for future contributions. Thanks for your support! ⭐
+
 ### **1️⃣ Pick an Issue**  
 
 - Browse open issues.  
