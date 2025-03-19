@@ -102,6 +102,7 @@ zeroXBridge-sequencer/
 │   ├── relayer/             # Relayer Service (Sends proofs to L1/L2)
 │   │   ├── ethereum_relayer.rs  # Sends proofs to Ethereum
 │   │   ├── starknet_relayer.rs  # Sends proofs to Starknet
+│   ├── merkle_tree.rs       # Merkle tree implementation
 │   ├── main.rs              # Main entry point
 │── tests/                   # Unit & integration tests
 │── config.toml                 # Config files (DB, RPC endpoints, etc.)
