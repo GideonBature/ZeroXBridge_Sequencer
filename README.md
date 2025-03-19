@@ -166,10 +166,4 @@ cargo run
 🚀 **Yo, Let’s Go!**  
 🔥 **ZeroXBridge Sequencer is ready for contributors!**  
 
-**Next Steps:**  
-
-- **Add benchmarking for sequencer performance?**  
-- **Write additional stress tests for load handling?**  
-- **Need help setting up local dev environment instructions?**  
-
 Drop into the issues section and let’s build! 🎯🔥
