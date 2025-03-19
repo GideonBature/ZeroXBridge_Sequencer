@@ -1,0 +1,48 @@
+# ===========================
+# ZeroXBridge Sequencer Config
+# ===========================
+
+[contract]
+name = "zeroXBridge"
+
+[contracts]
+l1_contract_address = "0x0000000000000000000000000000000000000000"  # Replace with actual L1 contract
+l2_contract_address = "0x0000000000000000000000000000000000000000"  # Replace with actual L2 contract
+
+[server]
+host = "http://localhost:4000"
+server_url = "http://127.0.0.1:4000"
+
+[database]
+url = "postgres://username:password@localhost/zeroXBridgeDB"
+max_connections = 10
+
+[ethereum]
+rpc_url = "https://mainnet.infura.io/v3/YOUR_INFURA_KEY"
+chain_id = 1
+confirmations = 3
+
+[starknet]
+rpc_url = "https://starknet-mainnet.infura.io/v3/YOUR_INFURA_KEY"
+chain_id = "0x534e5f4d41494e"  # SN_MAIN
+
+[prover]
+
+[relayer]
+max_retries = 5
+retry_delay_seconds = 10
+gas_limit = 500000
+
+[queue]
+# Settings for queue delays and retries
+wait_time_seconds = 5
+max_retries = 3
+retry_delay_seconds = 15
+
+[merkle]
+tree_depth = 32
+cache_size = 1000
+
+[logging]
+level = "info"  # Options: debug, info, warn, error
+file = "logs/sequencer.log"
