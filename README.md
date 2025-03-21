@@ -45,7 +45,14 @@ The sequencer is divided into four core services:
 
 - Fetches **"ready for relay" transactions**.  
 - Sends transactions to **Ethereum (L1)** or **Starknet (L2)**.  
-- Waits for **on-chain confirmation** before marking requests as `complete`.  
+- Waits for **on-chain confirmation** before marking requests as `complete`.
+
+### ** 5️⃣ Oracle Service **
+- Periodically fetches the total TVL from the L1 contract using get_total_tvl() (already aggregated via Chainlink).
+- Compares it with the L2 oracle contract value via get_total_tvl().
+- If the difference exceeds a configurable tolerance, it calls update_tvl() on L2 to sync the state.
+- Helps ensure users receive a fair amount of tokens on L2 based on real L1 reserves.
+- Reduces update frequency by enforcing range-based thresholding (e.g., >1% deviation).
 
 ---
 
@@ -102,6 +109,8 @@ zeroXBridge-sequencer/
 │   ├── relayer/             # Relayer Service (Sends proofs to L1/L2)
 │   │   ├── ethereum_relayer.rs  # Sends proofs to Ethereum
 │   │   ├── starknet_relayer.rs  # Sends proofs to Starknet
+│   ├── oracle_service/           # Oracle Service logic
+│   │   ├── tvl_sync.rs           # Periodically fetches and updates TVL
 │   ├── merkle_tree.rs       # Merkle tree implementation
 │   ├── main.rs              # Main entry point
 │── tests/                   # Unit & integration tests
