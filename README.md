@@ -47,7 +47,7 @@ The sequencer is divided into four core services:
 - Sends transactions to **Ethereum (L1)** or **Starknet (L2)**.  
 - Waits for **on-chain confirmation** before marking requests as `complete`.
 
-### ** 5️⃣ Oracle Service **
+### **5️⃣ Oracle Service**
 - Periodically fetches the total TVL from the L1 contract using get_total_tvl() (already aggregated via Chainlink).
 - Compares it with the L2 oracle contract value via get_total_tvl().
 - If the difference exceeds a configurable tolerance, it calls update_tvl() on L2 to sync the state.
