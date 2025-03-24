@@ -96,3 +96,4 @@ pub struct LoggingConfig {
     pub level: String, // "debug" | "info" | "warn" | "error"
     pub file: String,
 }
+
