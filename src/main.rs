@@ -61,6 +61,6 @@ pub fn configure_routes() -> Router {
 
 
 async fn handler() -> &'static str {
-    "Welcome to ZeroXbridge Sequencer"
+    "Welcome to ZeroXBridge Sequencer"
 }
 
