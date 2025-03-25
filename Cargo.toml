@@ -16,6 +16,11 @@ sqlx = { version = "0.8.3", features = [
   "macros",
   "migrate",
 ] }
+starknet = "0.13.0"
+tracing = "0.1.41"
+chrono = "0.4.40"
+thiserror = "2.0.12"
+mockall = "0.13.1"
 
 [package.metadata.sqlx]
 offline = true
