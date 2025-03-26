@@ -96,3 +96,15 @@ pub struct LoggingConfig {
     pub level: String, // "debug" | "info" | "warn" | "error"
     pub file: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OracleConfig {
+    pub tolerance_percent: Option<f64>, // e.g., 0.01 for 1%
+    pub polling_interval_seconds: u64, // e.g., 60 seconds
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppConfig {
+    // ...existing fields...
+    pub oracle: OracleConfig,
+}
