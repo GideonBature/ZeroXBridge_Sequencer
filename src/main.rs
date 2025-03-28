@@ -11,6 +11,7 @@ mod db;
 
 use config::load_config;
 use db::client::DBClient;
+use crate::api::routes::create_router;
 
 #[tokio::main]
 async fn main() {

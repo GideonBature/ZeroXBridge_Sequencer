@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use sha2::{Sha256, Digest};
 use uuid::Uuid;
+use crate::api::database::{insert_deposit, insert_deposits, get_pending_deposit};
+
 
 pub async fn handle_deposits_post(
     Extension(pool): Extension<PgPool>,
