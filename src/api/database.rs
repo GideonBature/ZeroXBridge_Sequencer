@@ -1,7 +1,5 @@
 use serde::{Serialize, Deserialize};
-use sqlx::FromRow;
-use sqlx::PgPool;
-
+use sqlx::{FromRow, PgPool};
 
 #[derive(Debug, FromRow, Serialize, Deserialize)]
 pub struct Withdrawal {
@@ -19,7 +17,8 @@ pub async fn insert_withdrawal(
     amount: i64,
     commitment_hash: &str,
 ) -> Result<i32, sqlx::Error> {
-    let row = sqlx::query_scalar!(
+    let row: (i32,) = sqlx::query_as!(
+        Withdrawal,
         r#"
         INSERT INTO withdrawals (stark_pub_key, amount, commitment_hash, status)
         VALUES ($1, $2, $3, 'pending')
@@ -32,6 +31,5 @@ pub async fn insert_withdrawal(
     .fetch_one(pool)
     .await?;
 
-    Ok(row)
+    Ok(row.0)
 }
-
