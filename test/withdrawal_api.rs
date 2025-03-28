@@ -1,5 +1,5 @@
 use axum::{body::Body, http::{Request, StatusCode}};
-use zero_x_bridge_sequencer::api::{handlers::WithdrawalRequest, routes::{create_test_app}};
+use zeroxbridge_sequencer::api::{handlers::WithdrawalRequest, routes::create_test_app};
 use serde_json::json;
 use tower::ServiceExt; // for `app.oneshot()`
 
