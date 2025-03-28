@@ -11,14 +11,20 @@ anyhow = "1.0.95"
 axum = "0.8.1"
 tokio = { version = "1.44.1", features = ["full"] }
 sqlx = { version = "0.8.3", features = [
-        "postgres",
-        "runtime-tokio-rustls",
-        "macros",
-        "migrate",
-        "uuid",
+"uuid",
         "chrono",] }
 uuid = { version = "1.7.0", features = ["v4", "serde"] }
 chrono = { version = "0.4.38", features = ["serde"] }
+  "postgres",
+  "runtime-tokio-rustls",
+  "macros",
+  "migrate",
+] }
+starknet = "0.13.0"
+tracing = "0.1.41"
+chrono = "0.4.40"
+thiserror = "2.0.12"
+mockall = "0.13.1"
 
 [package.metadata.sqlx]
 offline = true
@@ -34,3 +40,7 @@ sha2 = "0.10"
 [[test]]
 name = "routes_test"
 path = "tests/routes_test.rs"
+
+[oracle]
+tolerance_percent = 0.01 # 1%
+polling_interval_seconds = 60 # 1 minute
