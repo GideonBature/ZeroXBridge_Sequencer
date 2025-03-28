@@ -19,3 +19,7 @@ sqlx = { version = "0.8.3", features = [
 
 [package.metadata.sqlx]
 offline = true
+
+[oracle]
+tolerance_percent = 0.01 # 1%
+polling_interval_seconds = 60 # 1 minute
