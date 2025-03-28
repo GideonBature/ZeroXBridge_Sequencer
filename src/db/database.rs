@@ -33,3 +33,34 @@ pub async fn insert_withdrawal(
 
     Ok(row.0)
 }
+
+pub async fn get_pending_withdrawals(pool: &PgPool) -> Result<Vec<Withdrawal>, sqlx::Error> {
+    sqlx::query_as!(
+        Withdrawal,
+        r#"SELECT * FROM withdrawals WHERE status = 'pending' ORDER BY created_at DESC"#
+    )
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn create_withdrawal(
+    pool: &PgPool,
+    stark_pub_key: String,
+    amount: String,
+    commitment_hash: String,
+) -> Result<Withdrawal, sqlx::Error> {
+    sqlx::query_as!(
+        Withdrawal,
+        r#"
+        INSERT INTO withdrawals (id, stark_pub_key, amount, commitment_hash, status)
+        VALUES ($1, $2, $3, $4, 'pending')
+        RETURNING *
+        "#,
+        Uuid::new_v4(), 
+        stark_pub_key, 
+        amount, 
+        commitment_hash
+    )
+    .fetch_one(pool)
+    .await
+}
