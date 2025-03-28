@@ -29,6 +29,7 @@ hyper = "0.14.27"
 tower = { version = "0.4.13", features = ["util"] }
 tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
 pretty_assertions = "1.4.0"
+sha2 = "0.10"
 
 [[test]]
 name = "routes_test"

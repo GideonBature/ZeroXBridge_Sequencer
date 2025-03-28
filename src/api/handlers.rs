@@ -4,23 +4,10 @@ use sqlx::PgPool;
 use sha2::{Sha256, Digest};
 use uuid::Uuid;
 
-use crate::api::database::{insert_withdrawal, Withdrawal, insert_deposit, Deposit, get_pending_deposit};
-
-#[derive(Deserialize)]
-pub struct WithdrawalRequest {
-    pub stark_pub_key: String,
-    pub amount: i64,
-}
-
-#[derive(Serialize)]
-pub struct WithdrawalResponse {
-    pub commitment_hash: String,
-}
-
-pub async fn handle_withdrawal_post(
+pub async fn handle_deposits_post(
     Extension(pool): Extension<PgPool>,
-    Json(payload): Json<WithdrawalRequest>,
-) -> Result<Json<WithdrawalResponse>, (StatusCode, String)> {
+    Json(payload): Json<DepositsRequest>,
+) -> Result<Json<DepositsResponse>, (StatusCode, String)> {
     // Validate inputs
     if payload.amount <= 0 {
         return Err((StatusCode::BAD_REQUEST, "Amount must be positive".to_string()));
@@ -42,8 +29,8 @@ pub async fn handle_withdrawal_post(
     let commitment_hash = format!("{:x}", hasher.finalize());
 
     // Insert into database
-    match insert_withdrawal(&pool, &payload.stark_pub_key, payload.amount, &commitment_hash).await {
-        Ok(_) => Ok(Json(WithdrawalResponse { commitment_hash })),
+    match insert_deposits(&pool, &payload.stark_pub_key, payload.amount, &commitment_hash).await {
+        Ok(_) => Ok(Json(DepositsResponse { commitment_hash })),
         Err(e) => {
             if e.to_string().contains("duplicate key") {
                 Err((StatusCode::CONFLICT, "Duplicate commitment hash".to_string()))
@@ -56,7 +43,7 @@ pub async fn handle_withdrawal_post(
 
 pub async fn handle_get_pending_deposit(
     Extension(pool): Extension<PgPool>,
-) -> Result<Json<Vec<Withdrawal>>, (StatusCode, String)> {
+) -> Result<Json<Vec<Deposits>>, (StatusCode, String)> {
     let deposit = get_pending_deposit(&pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -94,18 +81,4 @@ pub async fn handle_deposit_post(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(DepositResponse { commitment_hash }))
-}
-
-pub async fn handle_get_pending_deposits(
-    Extension(pool): Extension<PgPool>,
-) -> Result<Json<Vec<Deposit>>, (StatusCode, String)> {
-    let deposits = sqlx::query_as!(
-        Deposit,
-        r#"SELECT * FROM deposits WHERE status = 'pending' ORDER BY created_at DESC"#
-    )
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    Ok(Json(deposits))
 }

@@ -17,11 +17,11 @@ async fn main() {
 
     db.run_migrations().await.expect("Failed to run migrations");
 
-    let shared_db = Arc::new(db);
-
-    let app = Router::new()
+    let shared_db = Arc::new(db); 
+        let app = Router::new()
         .route("/", get(handler))
-        .layer(Extension(shared_db));
+        .merge(create_router(shared_db.pool.clone()));
+        
 
     let addr: SocketAddr = "127.0.0.1:3000".parse().unwrap();
     println!("ZeroXBridge Sequencer listening on {}", addr);

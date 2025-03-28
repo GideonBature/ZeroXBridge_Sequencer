@@ -2711,6 +2711,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
  "tokio",
  "tower 0.4.13",

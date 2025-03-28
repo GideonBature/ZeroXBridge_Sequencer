@@ -7,8 +7,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::api::handlers::{
-    handle_withdrawal_post, handle_get_pending_withdrawals,
-    handle_deposit_post, handle_get_pending_deposits
+    handle_deposit_post, handle_get_pending_deposits,
 };
 
 #[derive(Clone)]
@@ -19,14 +18,8 @@ pub struct AppState {
 pub fn create_router(pool: Arc<PgPool>) -> Router {
     Router::new()
         .route(
-            "/withdraw",
-            post(handle_withdrawal_post)
-                .get(handle_get_pending_withdrawals),
-        )
-        .route(
             "/deposit",
-            post(handle_deposit_post)
-                .get(handle_get_pending_deposits),
+            post(handle_deposit_post).get(handle_get_pending_deposits),
         )
         .layer(Extension(pool))
 }
@@ -47,7 +40,6 @@ pub async fn create_test_app() -> Router {
     let state = Arc::new(AppState { db: pool.clone() });
 
     Router::new()
-        .route("/withdraw", post(handle_withdrawal_post).get(handle_get_pending_withdrawals))
         .route("/deposit", post(handle_deposit_post).get(handle_get_pending_deposits))
-        .with_state(state)
+        .layer(Extension(state))
 }
