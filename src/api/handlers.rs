@@ -52,34 +52,16 @@ pub async fn handle_get_pending_deposit(
 
     Ok(Json(deposit))
 }
-// #[derive(Serialize)]
-// pub struct Deposits {
-//     pub id: i32,
-//     pub user_address: String,
-//     pub amount: i64,
-//     pub commitment_hash: String,
-//     pub status: String,
-//     ub created_at: chrono::NaiveDateTime,
-// }
-// #[derive(Deserialize)]
-// pub struct DepositRequest {
-//     pub user_address: String,
-//     pub amount: i64,
-// }
 
-// #[derive(Serialize)]
-// pub struct DepositResponse {
-//     pub commitment_hash: String,
-// }
 
 #[derive(Deserialize)]
-pub struct DepositsRequest {
-    pub stark_pub_key: String,
+pub struct DepositRequest {
+    pub user_address: String,
     pub amount: i64,
 }
 
 #[derive(Serialize)]
-pub struct DepositsResponse {
+pub struct DepositResponse {
     pub commitment_hash: String,
 }
 
