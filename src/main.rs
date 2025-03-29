@@ -4,6 +4,8 @@ use ethers::contract::Contract;
 use ethers::providers::{Http, Provider};
 use std::sync::Arc;
 use std::{net::SocketAddr, path::Path, sync::Arc};
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod config;
 mod db;
@@ -15,6 +17,13 @@ use db::client::DBClient;
 #[tokio::main]
 async fn main() {
     let config = load_config(Some(Path::new("config.toml"))).expect("Failed to load config");
+
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+        ))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
     let l1_provider =
         Provider::<Http>::try_from(config.ethereum.rpc_url.clone()).expect("Invalid L1 RPC URL");
@@ -38,7 +47,7 @@ async fn main() {
             .expect("TVL sync failed");
     });
 
-    let config = load_config(Some(Path::new("config.toml"))).expect("Failed to load config");
+    let pool = get_db_pool().await.expect("Failed to connect to database");
 
     let db = DBClient::new(&config)
         .await

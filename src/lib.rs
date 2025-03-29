@@ -1,8 +1,7 @@
 pub mod api;
 pub mod config;
 pub mod db;
-
-mod queue {
+pub mod queue {
     pub mod l1_queue;
     pub mod l2_queue;
 }

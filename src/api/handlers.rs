@@ -4,7 +4,17 @@ use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::db::database::{get_pending_deposits, insert_deposit, Deposit};
+use crate::db::database::{
+    create_withdrawal as db_create_withdrawal, get_pending_deposits,
+    get_pending_withdrawals as db_get_pending_withdrawals, insert_deposit, Deposit, Withdrawal,
+};
+
+#[derive(Debug, Deserialize)]
+pub struct CreateWithdrawalRequest {
+    pub stark_pub_key: String,
+    pub amount: i64,
+    pub commitment_hash: String,
+}
 
 #[derive(Deserialize)]
 pub struct DepositRequest {
@@ -54,4 +64,38 @@ pub async fn handle_get_pending_deposits(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(deposit))
+}
+
+pub async fn create_withdrawal(
+    Extension(pool): Extension<PgPool>,
+    Json(payload): Json<CreateWithdrawalRequest>,
+) -> Result<Json<Withdrawal>, (StatusCode, String)> {
+    let withdrawal = db_create_withdrawal(
+        &pool,
+        payload.stark_pub_key,
+        payload.amount,
+        payload.commitment_hash,
+    )
+    .await
+    .map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("DB Error: {:?}", err),
+        )
+    })?;
+
+    Ok(Json(withdrawal))
+}
+
+pub async fn get_pending_withdrawals(
+    Extension(pool): Extension<PgPool>,
+) -> Result<Json<Vec<Withdrawal>>, (StatusCode, String)> {
+    let withdrawals = db_get_pending_withdrawals(&pool).await.map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("DB Error: {:?}", err),
+        )
+    })?;
+
+    Ok(Json(withdrawals))
 }
