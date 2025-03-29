@@ -37,12 +37,12 @@ pub async fn insert_deposit(
 
 
 pub async fn get_pending_deposits(pool: &PdepositsgPool) -> Result<Vec<Withdrawal>, sqlx::Error> {
-    let withdrawals = sqlx::query_as!(
-        Withdrawal,
-        r#"SELECT * FROM withdrawals WHERE status = 'pending' ORDER BY created_at DESC"#
+    let deposits = sqlx::query_as!(
+        Deposits,
+        r#"SELECT * FROM deposits WHERE status = 'pending' ORDER BY created_at DESC"#
     )
     .fetch_all(pool)
     .await?;
 
-    Ok(withdrawals)
+    Ok(deposits)
 }

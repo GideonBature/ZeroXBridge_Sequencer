@@ -52,7 +52,14 @@ pub async fn handle_get_pending_deposit(
 
     Ok(Json(deposit))
 }
-
+#[derive(Serialize)]
+pub struct Deposits {
+    pub id: i32,
+    pub user_address: String,
+    pub amount: i64,
+    pub commitment_hash: String,
+    pub status: String,
+}
 #[derive(Deserialize)]
 pub struct DepositRequest {
     pub user_address: String,
@@ -78,9 +85,14 @@ pub async fn handle_deposit_post(
     hasher.update(format!("{}{}{}", payload.user_address, payload.amount, nonce));
     let commitment_hash = format!("{:x}", hasher.finalize());
 
-    insert_deposit(&pool, &payload.user_address, payload.amount, &commitment_hash)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    Ok(Json(DepositResponse { commitment_hash }))
+    match insert_deposit(&pool, &payload.user_address, payload.amount, &commitment_hash).await {
+            Ok(_) => Ok(Json(DepositResponse { commitment_hash })),
+            Err(e) => {
+                if e.to_string().contains("duplicate key") {
+                    Err((StatusCode::CONFLICT, "Duplicate commitment hash".to_string()))
+                } else {
+                    Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+                }
+            }
+        }
 }
