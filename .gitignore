@@ -1,3 +1,4 @@
 /target
 .qodo
 .env
+.gitignore

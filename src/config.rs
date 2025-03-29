@@ -18,7 +18,7 @@ pub fn load_config(config_file_path: Option<&Path>) -> anyhow::Result<AppConfig>
     Ok(settings.try_deserialize::<AppConfig>()?)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppConfig {
     pub contract: ContractConfig,
     pub contracts: Contracts,
@@ -31,6 +31,7 @@ pub struct AppConfig {
     pub queue: QueueConfig,
     pub merkle: MerkleConfig,
     pub logging: LoggingConfig,
+    pub oracle: OracleConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -98,14 +99,8 @@ pub struct LoggingConfig {
     pub file: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OracleConfig {
     pub tolerance_percent: Option<f64>, // e.g., 0.01 for 1%
-    pub polling_interval_seconds: u64, // e.g., 60 seconds
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AppConfig {
-    // ...existing fields...
-    pub oracle: OracleConfig,
+    pub polling_interval_seconds: u64,  // e.g., 60 seconds
 }
