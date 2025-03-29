@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use sha2::{Sha256, Digest};
 use uuid::Uuid;
-use crate::api::database::{insert_deposit, insert_deposits, get_pending_deposit};
+use crate::api::database::{insert_deposit, insert_deposits, get_pending_deposits};
 
 
 pub async fn handle_deposits_post(
@@ -46,7 +46,7 @@ pub async fn handle_deposits_post(
 pub async fn handle_get_pending_deposit(
     Extension(pool): Extension<PgPool>,
 ) -> Result<Json<Vec<Deposits>>, (StatusCode, String)> {
-    let deposit = get_pending_deposit(&pool)
+    let deposit = get_pending_deposits(&pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -59,6 +59,7 @@ pub struct Deposits {
     pub amount: i64,
     pub commitment_hash: String,
     pub status: String,
+    ub created_at: chrono::NaiveDateTime,
 }
 #[derive(Deserialize)]
 pub struct DepositRequest {

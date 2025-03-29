@@ -35,10 +35,9 @@ pub async fn insert_deposit(
     Ok(row)
 }
 
-
-pub async fn get_pending_deposits(pool: &PdepositsgPool) -> Result<Vec<Withdrawal>, sqlx::Error> {
+pub async fn get_pending_deposits(pool: &PgPool) -> Result<Vec<Deposit>, sqlx::Error> {
     let deposits = sqlx::query_as!(
-        Deposits,
+        Deposit,
         r#"SELECT * FROM deposits WHERE status = 'pending' ORDER BY created_at DESC"#
     )
     .fetch_all(pool)
