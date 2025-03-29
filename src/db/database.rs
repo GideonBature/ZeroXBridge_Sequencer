@@ -1,9 +1,10 @@
 use serde::{Serialize, Deserialize};
 use sqlx::{FromRow, PgPool};
+use uuid::Uuid;
 
 #[derive(Debug, FromRow, Serialize, Deserialize)]
 pub struct Withdrawal {
-    pub id: i32,
+    pub id: Uuid,
     pub stark_pub_key: String,
     pub amount: i64,
     pub commitment_hash: String,
@@ -16,9 +17,8 @@ pub async fn insert_withdrawal(
     stark_pub_key: &str,
     amount: i64,
     commitment_hash: &str,
-) -> Result<i32, sqlx::Error> {
-    let row: (i32,) = sqlx::query_as!(
-        Withdrawal,
+) -> Result<Uuid, sqlx::Error> {
+    let row = sqlx::query!(
         r#"
         INSERT INTO withdrawals (stark_pub_key, amount, commitment_hash, status)
         VALUES ($1, $2, $3, 'pending')
@@ -31,7 +31,7 @@ pub async fn insert_withdrawal(
     .fetch_one(pool)
     .await?;
 
-    Ok(row.0)
+    Ok(row.id)
 }
 
 pub async fn get_pending_withdrawals(pool: &PgPool) -> Result<Vec<Withdrawal>, sqlx::Error> {
@@ -46,7 +46,7 @@ pub async fn get_pending_withdrawals(pool: &PgPool) -> Result<Vec<Withdrawal>, s
 pub async fn create_withdrawal(
     pool: &PgPool,
     stark_pub_key: String,
-    amount: String,
+    amount: i64,
     commitment_hash: String,
 ) -> Result<Withdrawal, sqlx::Error> {
     sqlx::query_as!(

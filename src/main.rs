@@ -27,12 +27,17 @@ async fn main() {
         .await
         .expect("Failed to connect to database");
 
+    // Run database migrations
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("Failed to run database migrations");
+
     let state = Arc::new(pool);
 
     let app = create_router(state.clone());
 
     let addr = "0.0.0.0:3000".parse().unwrap();
-    let server = Server::try_bind(&addr);
 
     println!("🚀 Listening on {}", addr);
 
