@@ -2,15 +2,16 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
-#[derive(Debug, FromRow, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Withdrawal {
-    pub id: Uuid,
+    pub id: i32,
     pub stark_pub_key: String,
     pub amount: i64,
     pub commitment_hash: String,
-    pub status: String, // "pending", "processed", etc.
+    pub status: String,
     pub created_at: chrono::NaiveDateTime,
 }
+
 #[derive(Debug, FromRow, Serialize, Deserialize)]
 pub struct Deposit {
     pub id: i32,

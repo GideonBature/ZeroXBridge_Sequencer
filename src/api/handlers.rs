@@ -1,4 +1,3 @@
-use crate::api::models::Withdrawal;
 use axum::{http::StatusCode, Extension, Json};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -7,7 +6,7 @@ use uuid::Uuid;
 
 use crate::db::database::{
     create_withdrawal as db_create_withdrawal, get_pending_deposits,
-    get_pending_withdrawals as db_get_pending_withdrawals, insert_deposit, Deposit,
+    get_pending_withdrawals as db_get_pending_withdrawals, insert_deposit, Deposit, Withdrawal,
 };
 
 #[derive(Debug, Deserialize)]
