@@ -10,18 +10,21 @@ serde_json = "1"
 
 anyhow = "1.0.95"
 tokio = { version = "1.44.1", features = ["full"] }
+sqlx = { version = "0.8.3", features = [
+  "postgres",
+  "runtime-tokio-rustls",
+  "macros",
+  "migrate",
+] }
+starknet = "0.13.0"
 tracing = "0.1.41"
-sha2 = "0.10.8"
-uuid = { version = "1", features = ["v4"] }
-chrono = { version = "0.4", features = ["serde"] }
-hex = "0.4.3"
-dotenvy = "0.15"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tower-http = { version = "0.6", features = ["trace"] }
-sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "uuid", "chrono", "tls-rustls"] }
-hyper = { version = "0.14", features = ["server", "tcp"] }
-axum = "0.6"
+chrono = "0.4.40"
+thiserror = "2.0.12"
+mockall = "0.13.1"
 
-[dev-dependencies]
-sqlx-cli = { version = "0.7", default-features = false, features = ["postgres"] }
+[package.metadata.sqlx]
+offline = true
 
+[oracle]
+tolerance_percent = 0.01 # 1%
+polling_interval_seconds = 60 # 1 minute
