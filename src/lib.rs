@@ -1,7 +1,6 @@
-mod db {
-    pub mod client;
-}
-mod config;
+pub mod api;
+pub mod config;
+pub mod db;
 
 mod queue {
     pub mod l1_queue;
