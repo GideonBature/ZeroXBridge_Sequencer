@@ -1,14 +1,8 @@
-use axum::{
-    Router,
-    routing::{post, get},
-    Extension,
-};
+use axum::{routing::post, Extension, Router};
 use sqlx::PgPool;
 use std::sync::Arc;
 
-use crate::api::handlers::{
-    handle_deposit_post, handle_get_pending_deposits,
-};
+use crate::api::handlers::{handle_deposit_post, handle_get_pending_deposits};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -40,6 +34,9 @@ pub async fn create_test_app() -> Router {
     let state = Arc::new(AppState { db: pool.clone() });
 
     Router::new()
-        .route("/deposit", post(handle_deposit_post).get(handle_get_pending_deposits))
+        .route(
+            "/deposit",
+            post(handle_deposit_post).get(handle_get_pending_deposits),
+        )
         .layer(Extension(state))
 }
