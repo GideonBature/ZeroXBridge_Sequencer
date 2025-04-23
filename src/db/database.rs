@@ -1,15 +1,18 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgPool};
-use uuid::Uuid;
+use sqlx::{FromRow, PgConnection, PgPool};
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Withdrawal {
     pub id: i32,
     pub stark_pub_key: String,
     pub amount: i64,
+    pub l1_token: String,
     pub commitment_hash: String,
     pub status: String,
-    pub created_at: chrono::NaiveDateTime,
+    pub retry_count: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, FromRow, Serialize, Deserialize)]
@@ -19,15 +22,17 @@ pub struct Deposit {
     pub amount: i64,
     pub commitment_hash: String,
     pub status: String, // "pending", "processed", etc.
-    pub created_at: chrono::NaiveDateTime,
+    pub retry_count: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 pub async fn insert_withdrawal(
-    pool: &PgPool,
+    conn: &PgPool,
     stark_pub_key: &str,
     amount: i64,
     commitment_hash: &str,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<Withdrawal, sqlx::Error> {
     let row = sqlx::query!(
         r#"
         INSERT INTO withdrawals (stark_pub_key, amount, commitment_hash, status)
@@ -38,14 +43,14 @@ pub async fn insert_withdrawal(
         amount,
         commitment_hash
     )
-    .fetch_one(pool)
+    .fetch_one(conn)
     .await?;
 
-    Ok(row.id)
+    Ok(row)
 }
 
 pub async fn insert_deposit(
-    pool: &PgPool,
+    conn: &PgPool,
     user_address: &str,
     amount: i64,
     commitment_hash: &str,
@@ -60,50 +65,122 @@ pub async fn insert_deposit(
         amount,
         commitment_hash
     )
-    .fetch_one(pool)
+    .fetch_one(conn)
     .await?;
 
     Ok(row.id)
 }
 
-pub async fn get_pending_withdrawals(pool: &PgPool) -> Result<Vec<Withdrawal>, sqlx::Error> {
-    sqlx::query_as!(
-        Withdrawal,
-        r#"SELECT * FROM withdrawals WHERE status = 'pending' ORDER BY created_at DESC"#
-    )
-    .fetch_all(pool)
-    .await
-}
-
-pub async fn create_withdrawal(
-    pool: &PgPool,
-    stark_pub_key: String,
-    amount: i64,
-    commitment_hash: String,
-) -> Result<Withdrawal, sqlx::Error> {
-    sqlx::query_as!(
+pub async fn fetch_pending_withdrawals(
+    conn: &PgPool,
+    max_retries: u32,
+) -> Result<Vec<Withdrawal>, sqlx::Error> {
+    let withdrawals = sqlx::query_as!(
         Withdrawal,
         r#"
-        INSERT INTO withdrawals (id, stark_pub_key, amount, commitment_hash, status)
-        VALUES ($1, $2, $3, $4, 'pending')
-        RETURNING *
+        SELECT * FROM withdrawals
+        WHERE status = 'pending'
+        AND retry_count < $1
+        ORDER BY created_at ASC
+        LIMIT 10
         "#,
-        Uuid::new_v4(),
-        stark_pub_key,
-        amount,
-        commitment_hash
+        max_retries as i32
     )
-    .fetch_one(pool)
-    .await
+    .fetch_all(conn)
+    .await?;
+
+    Ok(withdrawals)
 }
 
-pub async fn get_pending_deposits(pool: &PgPool) -> Result<Vec<Deposit>, sqlx::Error> {
+pub async fn fetch_pending_deposits(
+    conn: &PgPool,
+    max_retries: u32,
+) -> Result<Vec<Deposit>, sqlx::Error> {
     let deposits = sqlx::query_as!(
         Deposit,
-        r#"SELECT * FROM deposits WHERE status = 'pending' ORDER BY created_at DESC"#
+        r#"
+        SELECT *
+        FROM deposits
+        WHERE status = 'pending' AND retry_count < $1
+        ORDER BY created_at ASC
+        LIMIT 10
+        "#,
+        max_retries as i32
     )
-    .fetch_all(pool)
+    .fetch_all(conn)
     .await?;
 
     Ok(deposits)
+}
+
+pub async fn update_deposit_status(
+    conn: &PgConnection,
+    id: i32,
+    status: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        UPDATE deposits 
+        SET status = $2, updated_at = NOW()
+        WHERE id = $1
+        "#,
+        id,
+        status
+    )
+    .execute(&mut conn)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn process_deposit_retry(conn: &PgConnection, id: i32) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        UPDATE deposits 
+        SET retry_count = retry_count + 1, updated_at = NOW()
+        WHERE id = $1
+        "#,
+        id
+    )
+    .execute(&mut conn)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn process_withdrawal_retry(conn: &PgConnection, id: i32) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        UPDATE withdrawals 
+        SET retry_count = retry_count + 1,
+        updated_at = NOW()
+        WHERE id = $1
+        "#,
+        id
+    )
+    .execute(&mut conn)
+    .await?;
+
+    Ok(());
+}
+
+pub async fn update_withdrawal_status(
+    conn: &PgConnection,
+    id: i32,
+    status: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        UPDATE withdrawals 
+        SET status = $2,
+        updated_at = NOW()
+        WHERE id = $1
+        "#,
+        id,
+        status
+    )
+    .execute(&mut conn)
+    .await?;
+
+    Ok(())
 }

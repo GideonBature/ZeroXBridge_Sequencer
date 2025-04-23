@@ -25,9 +25,7 @@ impl DBClient {
     }
 
     pub async fn run_migrations(&self) -> Result<()> {
-        sqlx::migrate!("./src/db/migrations")
-            .run(&*self.pool)
-            .await?;
+        sqlx::migrate!("./migrations").run(&*self.pool).await?;
         Ok(())
     }
 }
