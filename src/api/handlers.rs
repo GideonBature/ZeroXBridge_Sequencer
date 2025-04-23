@@ -5,8 +5,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::database::{
-    create_withdrawal as db_create_withdrawal, get_pending_deposits,
-    get_pending_withdrawals as db_get_pending_withdrawals, insert_deposit, Deposit, Withdrawal,
+    fetch_pending_deposits, fetch_pending_withdrawals, insert_deposit, insert_withdrawal, Deposit,
+    Withdrawal,
 };
 
 #[derive(Debug, Deserialize)]
@@ -59,7 +59,7 @@ pub async fn handle_deposit_post(
 pub async fn handle_get_pending_deposits(
     Extension(pool): Extension<PgPool>,
 ) -> Result<Json<Vec<Deposit>>, (StatusCode, String)> {
-    let deposit = get_pending_deposits(&pool)
+    let deposit = fetch_pending_deposits(&pool, 5)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -70,11 +70,11 @@ pub async fn create_withdrawal(
     Extension(pool): Extension<PgPool>,
     Json(payload): Json<CreateWithdrawalRequest>,
 ) -> Result<Json<Withdrawal>, (StatusCode, String)> {
-    let withdrawal = db_create_withdrawal(
+    let withdrawal = insert_withdrawal(
         &pool,
-        payload.stark_pub_key,
+        &payload.stark_pub_key,
         payload.amount,
-        payload.commitment_hash,
+        &payload.commitment_hash,
     )
     .await
     .map_err(|err| {
@@ -90,7 +90,7 @@ pub async fn create_withdrawal(
 pub async fn get_pending_withdrawals(
     Extension(pool): Extension<PgPool>,
 ) -> Result<Json<Vec<Withdrawal>>, (StatusCode, String)> {
-    let withdrawals = db_get_pending_withdrawals(&pool).await.map_err(|err| {
+    let withdrawals = fetch_pending_withdrawals(&pool, 5).await.map_err(|err| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("DB Error: {:?}", err),

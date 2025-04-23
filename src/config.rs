@@ -1,4 +1,3 @@
-
 use config::{Config, Environment, File};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -82,9 +81,12 @@ pub struct RelayerConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueueConfig {
+    pub process_interval_sec: u64,
     pub wait_time_seconds: u32,
     pub max_retries: u32,
+    pub initial_retry_delay_sec: u64,
     pub retry_delay_seconds: u32,
+    pub merkle_update_confirmations: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
