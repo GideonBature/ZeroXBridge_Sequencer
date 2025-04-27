@@ -1,0 +1,20 @@
+[package]
+name = "client_only"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "proof_client"
+path = "client.rs"
+
+[[test]]
+name = "test_herodotus_api"
+path = "test_herodotus_api.rs"
+
+[dependencies]
+anyhow = "1.0"
+reqwest = { version = "0.11", features = ["json", "multipart"] }
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+
+[dev-dependencies]
+mockito = "0.31"
