@@ -4,3 +4,4 @@
 .qodo
 .env
 .gitignore
+/tmp

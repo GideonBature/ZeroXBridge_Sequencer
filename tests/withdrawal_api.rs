@@ -61,7 +61,7 @@ async fn test_post_invalid_withdrawal() {
 async fn test_get_pending_withdrawals() {
     let app = create_test_app().await;
 
-    let request = Request::builder()
+    let request: Request<Body> = Request::builder()
         .method("GET")
         .uri("/withdraw")
         .body(Body::empty())

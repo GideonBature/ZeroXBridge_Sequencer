@@ -1,18 +1,18 @@
 use anyhow::Result;
 use mockito::{mock, Matcher};
-use proof_client::submit_sharp_proof_job;
 use std::env;
 use std::fs;
 use tokio;
+use zeroxbridge_sequencer::http::client::submit_sharp_proof_job;
 
 fn setup_dummy_files() -> Result<()> {
-    fs::create_dir_all("crates/cairo1-rust-vm/target/dev")?;
-    fs::create_dir_all("crates/cairo1-rust-vm")?;
+    fs::create_dir_all("tmp/target/dev")?;
+    fs::create_dir_all("tmp")?;
     fs::write(
-        "crates/cairo1-rust-vm/target/dev/cairo1.sierra.json",
+        "tmp/target/dev/cairo1.sierra.json",
         r#"{"dummy":"data"}"#,
     )?;
-    fs::write("crates/cairo1-rust-vm/input.cairo1.txt", "dummy input")?;
+    fs::write("tmp/input.cairo1.txt", "dummy input")?;
     Ok(())
 }
 
@@ -29,7 +29,13 @@ async fn test_submit_sharp_proof_job_positive_l1() -> Result<()> {
         .with_body("Job submitted successfully")
         .create();
 
-    let res = submit_sharp_proof_job("test_api".into(), "PROOF_VERIFICATION_ON_L1".into()).await;
+    let res = submit_sharp_proof_job(
+        "test_api".into(),
+        "PROOF_VERIFICATION_ON_L1".into(),
+        "tmp/target/dev/cairo1.sierra.json".into(),
+        "tmp/input.cairo1.txt".into(),
+    )
+    .await;
     assert!(res.is_ok());
     m.assert();
     Ok(())
@@ -48,7 +54,13 @@ async fn test_submit_sharp_proof_job_positive_l2() -> Result<()> {
         .with_body("Job submitted successfully")
         .create();
 
-    let res = submit_sharp_proof_job("test_api".into(), "PROOF_VERIFICATION_ON_L2".into()).await;
+    let res = submit_sharp_proof_job(
+        "test_api".into(),
+        "PROOF_VERIFICATION_ON_L2".into(),
+        "tmp/target/dev/cairo1.sierra.json".into(),
+        "tmp/input.cairo1.txt".into(),
+    )
+    .await;
     assert!(res.is_ok());
     m.assert();
     Ok(())
@@ -67,7 +79,13 @@ async fn test_submit_sharp_proof_job_negative_l1() -> Result<()> {
         .with_body("Invalid API key")
         .create();
 
-    let res = submit_sharp_proof_job("bad_api".into(), "PROOF_VERIFICATION_ON_L1".into()).await;
+    let res = submit_sharp_proof_job(
+        "bad_api".into(),
+        "PROOF_VERIFICATION_ON_L1".into(),
+        "tmp/target/dev/cairo1.sierra.json".into(),
+        "tmp/input.cairo1.txt".into(),
+    )
+    .await;
     assert!(res.is_ok());
     m.assert();
     Ok(())
@@ -86,7 +104,13 @@ async fn test_submit_sharp_proof_job_negative_l2() -> Result<()> {
         .with_body("Invalid API key")
         .create();
 
-    let res = submit_sharp_proof_job("bad_api".into(), "PROOF_VERIFICATION_ON_L2".into()).await;
+    let res = submit_sharp_proof_job(
+        "bad_api".into(),
+        "PROOF_VERIFICATION_ON_L2".into(),
+        "tmp/target/dev/cairo1.sierra.json".into(),
+        "tmp/input.cairo1.txt".into(),
+    )
+    .await;
     assert!(res.is_ok());
     m.assert();
     Ok(())

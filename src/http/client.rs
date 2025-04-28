@@ -4,9 +4,12 @@ use reqwest::Client;
 use std::env;
 use std::fs;
 
-pub async fn submit_sharp_proof_job(api_key: String, result: String) -> Result<()> {
-    let program_path = "crates/cairo1-rust-vm/target/dev/cairo1.sierra.json";
-    let input_path = "crates/cairo1-rust-vm/input.cairo1.txt";
+pub async fn submit_sharp_proof_job(
+    api_key: String,
+    result: String,
+    program_path: String,
+    input_path: String,
+) -> Result<()> {
     let program_bytes = fs::read(program_path)?;
     let input_bytes = fs::read(input_path)?;
 
@@ -28,7 +31,6 @@ pub async fn submit_sharp_proof_job(api_key: String, result: String) -> Result<(
 
     let client = Client::new();
 
-    // Use environment variable for testing
     let url = if let Ok(endpoint) = env::var("ATLANTIC_API_ENDPOINT") {
         format!("{}?apiKey={}", endpoint, api_key)
     } else {
