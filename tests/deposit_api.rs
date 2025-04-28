@@ -1,7 +1,11 @@
-use axum::{body::Body, http::{Request, StatusCode}};
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+};
 use serde_json::json;
 use tower::ServiceExt;
-use zero_x_bridge_sequencer::api::routes::create_test_app;
+
+use crate::utils::create_test_app;
 
 #[tokio::test]
 async fn test_post_valid_deposit() {
@@ -15,7 +19,8 @@ async fn test_post_valid_deposit() {
             json!({
                 "user_address": "0xuser123",
                 "amount": 1000
-            }).to_string(),
+            })
+            .to_string(),
         ))
         .unwrap();
 
@@ -39,7 +44,8 @@ async fn test_post_invalid_deposit() {
             json!({
                 "user_address": "",
                 "amount": -100
-            }).to_string(),
+            })
+            .to_string(),
         ))
         .unwrap();
 
@@ -60,7 +66,8 @@ async fn test_get_pending_deposits() {
             json!({
                 "user_address": "0xtest123",
                 "amount": 500
-            }).to_string(),
+            })
+            .to_string(),
         ))
         .unwrap();
 

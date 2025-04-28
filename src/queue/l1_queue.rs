@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 
 use crate::{
     config::QueueConfig,
@@ -97,8 +97,10 @@ impl L1Queue {
             .check_l1_commitment(deposit.commitment_hash.clone())
             .await?;
 
+        let max_retries_i32 = self.config.max_retries as i32;
+
         if !commitment_exists {
-            if deposit.retry_count + 1 >= self.config.max_retries.try_into().unwrap() {
+            if deposit.retry_count + 1 >= max_retries_i32 {
                 return Err(ValidationError::MaxRetriesExceeded);
             } else {
                 return Err(ValidationError::CommitmentPending);

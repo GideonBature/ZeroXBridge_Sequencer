@@ -62,19 +62,25 @@ impl L2Queue {
                     tx.commit().await?;
                 }
                 Err(ValidationError::CommitmentPending) => {
-                    warn!("Withdrawal {} not yet found on L1. Will retry.", deposit.id);
+                    warn!(
+                        "Withdrawal {} not yet found on L1. Will retry.",
+                        withdrawal.id
+                    );
                     process_withdrawal_retry(&mut tx, withdrawal.id).await?;
                     tx.commit().await?;
                 }
                 Err(ValidationError::MaxRetriesExceeded) => {
                     error!(
                         "Withdrawal {} failed after max retries. Marking as failed.",
-                        deposit.id
+                        withdrawal.id
                     );
                     update_withdrawal_status(&mut tx, withdrawal.id, "failed").await?;
                 }
                 Err(e) => {
-                    warn!("Deposit {} hit an error: {:?}. Will retry.", deposit.id, e);
+                    warn!(
+                        "Deposit {} hit an error: {:?}. Will retry.",
+                        withdrawal.id, e
+                    );
                     update_withdrawal_status(&mut tx, withdrawal.id, "failed").await?;
                     tx.commit().await?;
                 }
@@ -91,7 +97,9 @@ impl L2Queue {
             .await?;
 
         if !commitment_exists {
-            if withdrawal.retry_count + 1 >= self.config.max_retries.try_into().unwrap() {
+            let max_retries_i32 = self.config.max_retries as i32;
+
+            if withdrawal.retry_count + 1 >= max_retries_i32 {
                 return Err(ValidationError::MaxRetriesExceeded);
             } else {
                 return Err(ValidationError::CommitmentPending);

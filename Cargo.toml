@@ -18,6 +18,9 @@ sqlx = { version = "0.8.3", features = [
   "uuid",
   "chrono",
 ] }
+
+ethers = "2.0.14"
+
 uuid = { version = "1.7.0", features = ["v4", "serde"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 starknet = "0.13.0"
@@ -25,6 +28,9 @@ tracing = "0.1.41"
 thiserror = "2.0.12"
 mockall = "0.13.1"
 sha2 = "0.10"
+tower = { version = "0.4.13", features = ["full"] }
+tracing-subscriber = { version = "0.3.19", features = ["json", "env-filter"] }
+hyper = "0.14.27"
 
 [package.metadata.sqlx]
 offline = true
