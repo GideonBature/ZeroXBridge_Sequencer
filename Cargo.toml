@@ -25,6 +25,12 @@ tracing = "0.1.41"
 thiserror = "2.0.12"
 mockall = "0.13.1"
 sha2 = "0.10"
+alloy-json-rpc = "0.15.6"
+alloy-primitives = "1.0.0"
+alloy-rpc-client = "0.15.6"
+alloy-transport-http = "0.15.6"
+url = "2.5.4"
+alloy-sol-types = "1.0.0"
 
 [package.metadata.sqlx]
 offline = true
