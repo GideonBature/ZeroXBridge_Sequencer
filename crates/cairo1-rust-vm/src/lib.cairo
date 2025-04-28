@@ -13,8 +13,9 @@
 fn verify_commitment_in_root(
     commitment_hash: felt252, proof: Array<felt252>, new_root: felt252,
 ) -> felt252 {
-    let proof_span = proof.span();
-    println!("proof: {:?}", proof_span);
+    assert(!proof.is_empty(), 'Proof must not be empty');
+    let proof_span: Span<felt252> = proof.span();
+
     let mut computed_root: felt252 = commitment_hash;
     for proof_element in proof_span {
         computed_root =
@@ -27,24 +28,19 @@ fn verify_commitment_in_root(
 
     assert(computed_root == new_root, 'Computed root does not match');
 
-    new_root
+    computed_root
 }
 
 fn main(input: Array<felt252>) -> Array<felt252> {
-    let leaf_0: felt252 = 10;
-    let leaf_1: felt252 = 20;
-    let leaf_2: felt252 = 30;
-    let leaf_3: felt252 = 40;
-
-    let h_01 = core::pedersen::pedersen(leaf_0, leaf_1);
-    let h_23 = core::pedersen::pedersen(leaf_2, leaf_3);
+    let h_01 = core::pedersen::pedersen(*input.at(0), *input.at(1));
+    let h_23 = core::pedersen::pedersen(*input.at(2), *input.at(3));
     let root = core::pedersen::pedersen(h_01, h_23);
 
-    let commit_hash_to_verify = leaf_2;
+    let commit_hash_to_verify = *input.at(2);
     let expected_root_to_verify = root;
 
     let mut proof_for_2 = ArrayTrait::<felt252>::new();
-    proof_for_2.append(leaf_3); // Sibling at level 0
+    proof_for_2.append(*input.at(3)); // Sibling at level 0
     proof_for_2.append(h_01); // Sibling at level 1
 
     let verified_root = verify_commitment_in_root(
