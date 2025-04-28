@@ -1,13 +1,3 @@
-Got it — you want a clean `getting-started.md` that:
-
-- Spins up Postgres using **Docker** (only if they don't already have Postgres installed).
-- Shows the connection URL they should add to `.env`.
-- Explains **how to expose** it for `sqlx` (e.g., setting `DATABASE_URL` env var).
-
-Here’s a ready-to-use draft:
-
----
-
 # 🚀 Getting Started
 
 Welcome!  
