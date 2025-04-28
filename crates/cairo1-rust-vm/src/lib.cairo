@@ -1,15 +1,18 @@
 /// Verifies a Merkle proof for a given leaf hash against an expected root hash
 ///
 /// # Arguments
+///
 /// * `commitment_hash` (felt252) - The hash of the leaf node to verify.
 /// * `proof` (Array<felt252>) - An array of sibling hashes.
 /// * `new_root` (felt252) - The expected Merkle root hash.
 ///
 /// # Returns
+///
 /// * `felt252` - The `new_root` if the verification is successful.
 ///
 /// # Panics
-/// * Panics with the message 'Invalid merkle proof' if the verification fails.
+///
+/// * Panics with the message 'Computed root does not match' if the verification fails.
 fn verify_commitment_in_root(
     commitment_hash: felt252, proof: Array<felt252>, new_root: felt252,
 ) -> felt252 {
@@ -31,21 +34,30 @@ fn verify_commitment_in_root(
     computed_root
 }
 
+
+/// Verifies a Merkle proof by computing the root from a leaf and its siblings.
+///
+/// This function takes a flattened array containing the expected Merkle root,
+/// the leaf hash, and the sibling hashes that constitute the proof path.
+///
+/// # Arguments
+///
+/// * `input` (`Array<felt252>`) - An array containing the Merkle proof components,
+///   structured precisely as follows:
+///   - `input[0]`: expected Merkle root (`root`).
+///   - `input[1]`: hash of the leaf (`leaf`).
+///   - `input[2..N]`: sibling hashes (`siblings`).
+///
+/// # Returns
+///
+/// * `Array<felt252>` - An array containing a single `felt252` element representing
+///   the computed Merkle root.
 fn main(input: Array<felt252>) -> Array<felt252> {
-    let h_01 = core::pedersen::pedersen(*input.at(0), *input.at(1));
-    let h_23 = core::pedersen::pedersen(*input.at(2), *input.at(3));
-    let root = core::pedersen::pedersen(h_01, h_23);
-
-    let commit_hash_to_verify = *input.at(2);
-    let expected_root_to_verify = root;
-
-    let mut proof_for_2 = ArrayTrait::<felt252>::new();
-    proof_for_2.append(*input.at(3)); // Sibling at level 0
-    proof_for_2.append(h_01); // Sibling at level 1
-
-    let verified_root = verify_commitment_in_root(
-        commit_hash_to_verify, proof_for_2.clone(), expected_root_to_verify,
-    );
+    let mut proof = ArrayTrait::new();
+    for i in 2..input.len() {
+        proof.append(*input.at(i));
+    }
+    let verified_root = verify_commitment_in_root(*input.at(1), proof, *input.at(0));
 
     let mut result_array = ArrayTrait::new();
     result_array.append(verified_root);
@@ -135,7 +147,6 @@ mod tests {
         let mut empty_proof = ArrayTrait::<felt252>::new();
 
         verify_commitment_in_root(leaf_0, empty_proof, root);
-
     }
 
     #[test]
