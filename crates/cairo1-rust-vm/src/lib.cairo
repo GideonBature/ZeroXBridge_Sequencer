@@ -53,6 +53,7 @@ fn verify_commitment_in_root(
 /// * `Array<felt252>` - An array containing a single `felt252` element representing
 ///   the computed Merkle root.
 fn main(input: Array<felt252>) -> Array<felt252> {
+    assert(input.len() >= 3, 'invalid input');
     let mut proof = ArrayTrait::new();
     for i in 2..input.len() {
         proof.append(*input.at(i));
