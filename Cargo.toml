@@ -1,41 +1,10 @@
 [package]
-name = "zeroxbridge_sequencer"
+name = "zero_x_bridge_sequencer"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-config = "0.15.11"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.133"
-axum = "0.8.3"
-anyhow = "1.0.95"
-tokio = { version = "1.44.1", features = ["full"] }
-sqlx = { version = "0.8.3", features = [
-  "postgres",
-  "runtime-tokio-rustls",
-  "macros",
-  "migrate",
-  "uuid",
-  "chrono",
-] }
-uuid = { version = "1.7.0", features = ["v4", "serde"] }
-chrono = { version = "0.4.38", features = ["serde"] }
-starknet = "0.13.0"
-tracing = "0.1.41"
-thiserror = "2.0.12"
-mockall = "0.13.1"
-sha2 = "0.10"
-
-[package.metadata.sqlx]
-offline = true
-
-[dev-dependencies]
-dotenv = "0.15.0"
-hyper = "0.14.27"
-tower = { version = "0.4.13", features = ["util"] }
-tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
-pretty_assertions = "1.4.0"
-
-[[test]]
-name = "routes_test"
-path = "tests/routes_test.rs"
+serde_json = "1.0"
+# Add other dependencies from the original section here
+some_crate = "1.0"  # Example
