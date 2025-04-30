@@ -124,6 +124,7 @@ zeroXBridge-sequencer/
 
 ## **⚡ Setup & Run**  
 
+### Using Cargo
 ### **1️⃣ Install Dependencies**  
 
 ```bash
@@ -135,6 +136,38 @@ cargo build
 ```bash
 cargo run
 ```
+
+### Using Makefile
+The following make targets are available:
+
+- **common-start:** Builds the Docker image, runs the container, and applies migrations.
+  ```bash
+  make common-start
+  ```
+- **docker-build:** Builds the Docker image.
+  ```bash
+  make docker-build
+  ```
+- **docker-run:** Runs the Docker container using environment variables from the `.env` file.
+  ```bash
+  make docker-run
+  ```
+- **migrate-run:** Runs pending SQLx migrations.
+  ```bash
+  make migrate-run
+  ```
+- **migrate-info:** Displays current SQLx migration status.
+  ```bash
+  make migrate-info
+  ```
+- **migrate-revert:** Reverts the last applied migration.
+  ```bash
+  make migrate-revert
+  ```
+- **clean:** Stops and removes the Docker container.
+  ```bash
+  make clean
+  ```
 
 ---
 

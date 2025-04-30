@@ -1,6 +1,7 @@
 pub mod api;
 pub mod config;
 pub mod db;
+pub mod http;
 pub mod oracle_service {
     pub mod oracle_service;
 }
@@ -10,3 +11,4 @@ pub mod queue {
 }
 
 pub mod events;
+pub mod proof_generator;
