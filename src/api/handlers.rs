@@ -1,30 +1,34 @@
 use axum::{http::StatusCode, Extension, Json};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::db::database::{
     fetch_pending_deposits, fetch_pending_withdrawals, insert_deposit, insert_withdrawal, Deposit,
     Withdrawal,
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateWithdrawalRequest {
     pub stark_pub_key: String,
     pub amount: i64,
     pub commitment_hash: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct DepositRequest {
     pub user_address: String,
     pub amount: i64,
+    pub commitment_hash: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct DepositResponse {
-    pub commitment_hash: String,
+    pub deposit_id: i32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct WithrawalResponse {
+    pub withdrawal_id: i32,
 }
 
 pub async fn handle_deposit_post(
@@ -34,26 +38,16 @@ pub async fn handle_deposit_post(
     if payload.amount <= 0 || payload.user_address.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, "Invalid input".to_string()));
     }
-
-    // Generate a salted commitment hash using UUID
-    let nonce = Uuid::new_v4();
-    let mut hasher = Sha256::new();
-    hasher.update(format!(
-        "{}{}{}",
-        payload.user_address, payload.amount, nonce
-    ));
-    let commitment_hash = format!("{:x}", hasher.finalize());
-
-    insert_deposit(
+    let deposit_id = insert_deposit(
         &pool,
         &payload.user_address,
         payload.amount,
-        &commitment_hash,
+        &payload.commitment_hash,
     )
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(DepositResponse { commitment_hash }))
+    Ok(Json(DepositResponse { deposit_id }))
 }
 
 pub async fn handle_get_pending_deposits(
@@ -69,8 +63,8 @@ pub async fn handle_get_pending_deposits(
 pub async fn create_withdrawal(
     Extension(pool): Extension<PgPool>,
     Json(payload): Json<CreateWithdrawalRequest>,
-) -> Result<Json<Withdrawal>, (StatusCode, String)> {
-    let withdrawal = insert_withdrawal(
+) -> Result<Json<WithrawalResponse>, (StatusCode, String)> {
+    let withdrawal_id = insert_withdrawal(
         &pool,
         &payload.stark_pub_key,
         payload.amount,
@@ -84,7 +78,7 @@ pub async fn create_withdrawal(
         )
     })?;
 
-    Ok(Json(withdrawal))
+    Ok(Json(WithrawalResponse { withdrawal_id }))
 }
 
 pub async fn get_pending_withdrawals(
