@@ -1,4 +1,5 @@
-use crate::utils::create_test_app;
+#[path = "utils.rs"]
+mod utils;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
@@ -6,6 +7,7 @@ use axum::{
 use hyper;
 use serde_json::json;
 use tower::ServiceExt;
+use utils::create_test_app;
 
 #[tokio::test]
 async fn test_post_valid_withdrawal() {
@@ -27,7 +29,9 @@ async fn test_post_valid_withdrawal() {
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(parsed.get("commitment_hash").is_some());
 }
@@ -57,7 +61,7 @@ async fn test_post_invalid_withdrawal() {
 async fn test_get_pending_withdrawals() {
     let app = create_test_app().await;
 
-    let request = Request::builder()
+    let request: Request<Body> = Request::builder()
         .method("GET")
         .uri("/withdraw")
         .body(Body::empty())
@@ -66,7 +70,9 @@ async fn test_get_pending_withdrawals() {
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(parsed.is_array());
 }
