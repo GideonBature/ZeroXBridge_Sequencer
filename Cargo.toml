@@ -1,5 +1,5 @@
 [package]
-name = "zeroxbridge_sequencer"
+name = "zero_x_bridge_sequencer"
 version = "0.1.0"
 edition = "2021"
 
@@ -45,4 +45,3 @@ tower = { version = "0.4.13", features = ["util"] }
 tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
 pretty_assertions = "1.4.0"
 mockito = "0.31"
-
