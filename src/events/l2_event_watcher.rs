@@ -1,19 +1,16 @@
 use crate::config::AppConfig;
-use crate::db::{get_last_processed_block, update_last_processed_block};
+use crate::db::database::{get_last_processed_block, update_last_processed_block};
 use anyhow::{anyhow, Context, Result};
-use log::{debug, error, info, warn};
+use tracing::log::{info, warn};
 use serde::{Deserialize, Serialize};
-use sqlx::{PgConnection, PgPool};
-use starknet::{
-    core::types::{BlockId, Event, EventFilter, EventsPage, FieldElement},
-    providers::{Provider, ProviderError},
-};
+use sqlx::PgPool;
+use starknet::core::types::{BlockId, EventFilter, EventsPage, Felt};
 use std::time::Duration;
 use tokio::time::sleep;
 
 const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY_MS: u64 = 1000;
-const DEFAULT_PAGE_SIZE: u32 = 100;
+const DEFAULT_PAGE_SIZE: u64 = 100;
 
 // Name of the table for storing block tracker
 const BLOCK_TRACKER_KEY: &str = "l2_burn_events_last_block";
@@ -30,15 +27,24 @@ pub struct CommitmentLog {
     pub amount_high: String,
 }
 
+pub trait TestProvider {
+    fn block_number(&self) -> Result<u64, Box<dyn std::error::Error + Send + Sync>>;
+    fn get_events(
+        &self,
+        filter: EventFilter,
+        continuation_token: Option<String>,
+        chunk_size: u64,
+    ) -> Result<EventsPage, Box<dyn std::error::Error + Send + Sync>>;
+}
+
 /// This function queries the L2 burn contract for events,
 /// filters them by the "BurnEvent" event selector, and parses them into CommitmentLog structs.
-pub async fn fetch_l2_burn_events(
+pub async fn fetch_l2_burn_events<P: TestProvider>(
     config: &AppConfig,
     db_pool: &PgPool,
     from_block: u64,
+    provider: &P,
 ) -> Result<Vec<CommitmentLog>> {
-    let provider = starknet::providers::JsonRpcHttpProvider::new(config.starknet.rpc_url.clone());
-    
     // Get a connection from the pool
     let mut conn = db_pool.acquire().await?;
     
@@ -53,14 +59,14 @@ pub async fn fetch_l2_burn_events(
     };
     
     // Get current block for pagination purposes
-    let latest_block = get_latest_block_with_retry(&provider).await?;
+    let latest_block = get_latest_block_with_retry(provider).await?;
     
     // Define the L2 burn contract address
-    let burn_contract_address = FieldElement::from_hex_be(&config.contracts.l2_contract_address)
+    let burn_contract_address = Felt::from_hex(&config.contracts.l2_contract_address)
         .context("Invalid L2 burn contract address")?;
     
     // Create event selector for the "BurnEvent" event
-    let burned_event_key = FieldElement::from_hex_be(BURN_EVENT_KEY)
+    let burned_event_key = Felt::from_hex(BURN_EVENT_KEY)
         .context("Failed to create event key")?;
     
     // Define the event filter
@@ -68,7 +74,7 @@ pub async fn fetch_l2_burn_events(
         from_block: Some(BlockId::Number(start_block)),
         to_block: Some(BlockId::Number(latest_block)),
         address: Some(burn_contract_address),
-        keys: vec![vec![burned_event_key]],
+        keys: Some(vec![vec![burned_event_key]]),
     };
     
     let mut all_events = Vec::new();
@@ -77,13 +83,14 @@ pub async fn fetch_l2_burn_events(
     // Fetch events with pagination
     loop {
         let events = fetch_events_with_retry(
-            &provider, 
+            provider, 
             &event_filter, 
             continuation_token.clone(), 
             DEFAULT_PAGE_SIZE
         ).await?;
         
         if events.events.is_empty() {
+            print!("No events found!!");
             break;
         }
         
@@ -92,15 +99,15 @@ pub async fn fetch_l2_burn_events(
             if event.data.len() >= 4 {
                 // BurnEvent data structure:
                 // [user, amount_low, amount_high, commitment_hash]
-                let user = format!("0x{}", event.data[0].to_hex_string());
-                let amount_low = format!("0x{}", event.data[1].to_hex_string());
-                let amount_high = format!("0x{}", event.data[2].to_hex_string());
-                let commitment_hash = format!("0x{}", event.data[3].to_hex_string());
+                let user = event.data[0].to_hex_string();
+                let amount_low = event.data[1].to_hex_string();
+                let amount_high = event.data[2].to_hex_string();
+                let commitment_hash = event.data[3].to_hex_string();
                 
                 all_events.push(CommitmentLog {
                     commitment_hash,
-                    block_number: event.block_number,
-                    transaction_hash: format!("0x{}", event.transaction_hash.to_hex_string()),
+                    block_number: event.block_number.expect("Event must have a block number"),
+                    transaction_hash: event.transaction_hash.to_hex_string(),
                     user,
                     amount_low,
                     amount_high,
@@ -145,9 +152,9 @@ pub async fn fetch_l2_burn_events(
     Ok(all_events)
 }
 
-async fn get_latest_block_with_retry<P: Provider>(provider: &P) -> Result<u64> {
+async fn get_latest_block_with_retry<P: TestProvider>(provider: &P) -> Result<u64> {
     for attempt in 1..=MAX_RETRIES {
-        match provider.block_number().await {
+        match provider.block_number() {
             Ok(block) => return Ok(block),
             Err(e) => {
                 if attempt == MAX_RETRIES {
@@ -162,21 +169,14 @@ async fn get_latest_block_with_retry<P: Provider>(provider: &P) -> Result<u64> {
     Err(anyhow!("Failed to get latest block after {} attempts", MAX_RETRIES))
 }
 
-async fn fetch_events_with_retry<P: Provider>(
+async fn fetch_events_with_retry<P: TestProvider>(
     provider: &P,
     filter: &EventFilter,
     continuation_token: Option<String>,
-    chunk_size: u32,
+    chunk_size: u64,
 ) -> Result<EventsPage> {
     for attempt in 1..=MAX_RETRIES {
-        match provider
-            .get_events(
-                filter,
-                continuation_token.clone(),
-                chunk_size,
-            )
-            .await
-        {
+        match provider.get_events(filter.clone(), continuation_token.clone(), chunk_size) {
             Ok(events) => return Ok(events),
             Err(e) => {
                 if attempt == MAX_RETRIES {
