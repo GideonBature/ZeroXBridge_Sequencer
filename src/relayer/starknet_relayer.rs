@@ -67,23 +67,40 @@ impl StarknetRelayer {
         db_pool: Pool<Postgres>,
         config: StarknetRelayerConfig,
     ) -> Result<Self, StarknetRelayerError> {
+
+        // Import necessary modules
+use starknet::core::chain_id::MAINNET; // or TESTNET depending on your environment
+use starknet::providers::jsonrpc::HttpTransport;
+use starknet::providers::jsonrpc::JsonRpcClient;
+
+// Begin implementation block for StarknetRelayer
+impl StarknetRelayer {
+    pub async fn new(
+        db_pool: Pool<Postgres>,
+        config: StarknetRelayerConfig,
+    ) -> Result<Self, StarknetRelayerError> {
+        // Your logic to create a new StarknetRelayer instance
+    }
+}
+
         // Create JsonRpcClient provider
-        let provider = JsonRpcClient::new(HttpTransport::new(config.rpc_url.clone()));
+let provider = JsonRpcClient::new(HttpTransport::new(config.rpc_url.clone()));
 
-        // Parse private key to create a signer
-        let private_key = FieldElement::from_hex_be(&config.private_key)
-            .map_err(|_| StarknetRelayerError::InvalidContractAddress)?;
-        let signer = LocalWallet::from(SigningKey::from_secret_scalar(private_key));
+// Parse private key to create a signer
+let private_key = FieldElement::from_hex_be(&config.private_key)
+    .map_err(|_| StarknetRelayerError::InvalidContractAddress)?;
+let signer = LocalWallet::from(SigningKey::from_secret_scalar(private_key));
 
-        // Parse contract address
-        let account_address = signer.address();  // Or read from ENV
+// Parse contract address
+let account_address = signer.address();  // Or read from ENV
 
-        let account = SingleOwnerAccount::new(
-            provider,
-            signer,
-            account_address,  // Corrected to use account address
-            chain_id,
-        );
+let account = SingleOwnerAccount::new(
+    provider,
+    signer,
+    account_address,  // Corrected to use account address
+    chain_id,
+);
+
 
         Ok(Self {
             db_pool,
@@ -227,26 +244,23 @@ impl StarknetRelayer {
         //     merkle_root: felt
         // )
         
-        // Prepare the call parameters 
-        // NOTE: This is a simplified example - adjust according to your actual contract
-        let withdrawal_id = FieldElement::from_dec_str(&tx.id.to_string())
-            .map_err(|_| StarknetRelayerError::TransactionFailed("Failed to convert ID".to_string()))?;
+        let mut calldata = vec![
+            withdrawal_id,
+            FieldElement::from_dec_str(&proof_array.len().to_string())
+                .map_err(|_| StarknetRelayerError::TransactionFailed("Invalid proof length".to_string()))?,
+        ];
         
-        // Convert proof data to felt array (simplified example)
-        let proof_array = match proof.get("proof_array") {
-            Some(serde_json::Value::Array(array)) => {
-                let mut felt_array = Vec::new();
-                for value in array {
-                    if let Some(s) = value.as_str() {
-                        let felt = FieldElement::from_hex_be(s)
-                            .map_err(|_| StarknetRelayerError::TransactionFailed("Invalid proof element".to_string()))?;
-                        felt_array.push(felt);
-                    }
-                }
-                felt_array
-            },
-            _ => return Err(StarknetRelayerError::ProofDataMissing),
-        };
+        calldata.extend(proof_array.clone());
+        calldata.push(merkle_root);
+        
+        let calls = vec![Call {
+            to: FieldElement::from_hex_be(&self.config.bridge_contract_address)
+                .map_err(|_| StarknetRelayerError::InvalidContractAddress)?,
+            selector: cairo_short_string_to_felt("process_withdrawal")
+                .map_err(|_| StarknetRelayerError::SelectorParseFailed)?,
+            calldata,
+        }];
+        
         
         let merkle_root = match proof.get("merkle_root") {
             Some(value) => {
@@ -292,33 +306,52 @@ let calls = vec![Call {
     }
 
     // Wait for transaction confirmation
-async fn wait_for_transaction_confirmation(
-    &self,
-    tx_hash: FieldElement,
-) -> Result<(), StarknetRelayerError> {
-    let timeout = Duration::from_millis(self.config.transaction_timeout_ms);
-    let start_time = std::time::Instant::now();
-
-    loop {
-        // Check if transaction has been confirmed
-        match self.account.provider().get_transaction_receipt(tx_hash).await {
-            Ok(receipt) => {
-                // Check the receipt's status to ensure it's not reverted or rejected
-                if receipt.status == "ACCEPTED_ON_L2" {
-                    // Transaction is confirmed successfully
-                    return Ok(());
-                } else {
-                    // Transaction failed (reverted/rejected)
-                    return Err(StarknetRelayerError::TransactionFailed(
-                        "Transaction failed or reverted.".to_string(),
-                    ));
+    use starknet::core::types::{TransactionReceipt, ExecutionStatus, MaybePendingTransactionReceipt};
+    use starknet::providers::ProviderError;
+    use starknet::core::types::ExecutionStatus::Succeeded;
+    
+    async fn wait_for_transaction_confirmation(
+        &self,
+        tx_hash: FieldElement,
+    ) -> Result<(), StarknetRelayerError> {
+        let timeout = Duration::from_millis(self.config.transaction_timeout_ms);
+        let start_time = std::time::Instant::now();
+    
+        loop {
+            if start_time.elapsed() > timeout {
+                return Err(StarknetRelayerError::Timeout(
+                    "Transaction confirmation timed out".to_string(),
+                ));
+            }
+    
+            match self.account.provider().get_transaction_receipt(tx_hash).await {
+                Ok(MaybePendingTransactionReceipt::Receipt(receipt)) => {
+                    match receipt.execution_status {
+                        Some(ExecutionStatus::Succeeded) => return Ok(()),
+                        Some(ExecutionStatus::Reverted) => {
+                            return Err(StarknetRelayerError::TransactionFailed(
+                                "Transaction reverted".to_string(),
+                            ));
+                        }
+                        _ => {
+                            // Still pending or failed in an unknown way — keep polling
+                        }
+                    }
                 }
+                Ok(MaybePendingTransactionReceipt::PendingReceipt(_)) => {
+                    // Still pending — retry
+                }
+                Err(ProviderError::StarknetError(
+                    starknet::providers::jsonrpc::error::StarknetError::TransactionHashNotFound,
+                )) => {
+                    // Hash not found yet — retry
+                }
+                Err(e) => return Err(StarknetRelayerError::Provider(e.into())),
             }
-            Err(e) => {
-                // Handle any errors from the provider (e.g., network failure)
-                return Err(StarknetRelayerError::ProviderError(e.to_string()));
-            }
+    
+            tokio::time::sleep(Duration::from_secs(2)).await;
         }
+    }
 
         // Timeout check
         if start_time.elapsed() > timeout {
@@ -331,23 +364,6 @@ async fn wait_for_transaction_confirmation(
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }
-
-                    // Check if we've exceeded the timeout
-                    if start_time.elapsed() > timeout {
-                        return Err(StarknetRelayerError::TransactionTimeout);
-                    }
-                    
-                    // If error is not just "transaction not found", propagate it
-                    if !matches!(e, ProviderError::StarknetError(MaybeUnknownErrorCode::Known(StarknetErrorCode::TransactionHashNotFound))) {
-                        return Err(StarknetRelayerError::Provider(e));
-                    }
-                    
-                    // Sleep before checking again
-                    sleep(Duration::from_secs(2)).await;
-                }
-            }
-        }
-    }
 
     // Mark transaction as processing in the database
     async fn mark_transaction_processing(&self, tx: &L2Transaction) -> Result<(), StarknetRelayerError> {
@@ -411,13 +427,37 @@ async fn wait_for_transaction_confirmation(
     }
 }
 
-use starknet::providers::jsonrpc::{HttpTransport, JsonRpcClient}; // Import the upstream HttpTransport and JsonRpcClient
-use url::Url; // Import Url for proper URL parsing
+impl StarknetRelayer {
+    // Initialize a new StarknetRelayer
+    pub async fn new(
+        db_pool: Pool<Postgres>,
+        config: StarknetRelayerConfig,
+    ) -> Result<Self, StarknetRelayerError> {
+        // Initialize the transport using the upstream HttpTransport
+        let transport = HttpTransport::new(Url::parse(&config.rpc_url)?);
 
-// Removed custom `Transport` trait and `HttpTransport` definition to avoid conflicts
+        // Create the provider with the upstream JsonRpcClient and the custom transport
+        let provider = JsonRpcClient::new(transport);
 
-// Initialize the transport using the upstream HttpTransport
-let transport = HttpTransport::new(Url::parse(&config.rpc_url)?);
+        // Parse private key to create a signer
+        let private_key = FieldElement::from_hex_be(&config.private_key)
+            .map_err(|_| StarknetRelayerError::InvalidContractAddress)?;
+        let signer = LocalWallet::from(SigningKey::from_secret_scalar(private_key));
 
-// Create the provider with the upstream JsonRpcClient and the custom transport
-let provider = JsonRpcClient::new(transport);
+        // Parse contract address
+        let account_address = signer.address();  // Or read from ENV
+
+        let account = SingleOwnerAccount::new(
+            provider,
+            signer,
+            account_address,  // Corrected to use account address
+            chain_id,
+        );
+
+        Ok(Self {
+            db_pool,
+            config,
+            account,
+        })
+    }
+}

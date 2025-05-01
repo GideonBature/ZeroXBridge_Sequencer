@@ -51,50 +51,58 @@ async fn create_test_db_pool() -> Pool<Postgres> {
                 "merkle_root": "0xabcdef123456789"
             }"#.to_string()),
         }
-        
+
         #[tokio::test]
-        async fn test_fetch_ready_transactions() {
-            let pool = create_test_db_pool().await;
-        
-            // Insert a test transaction directly via the pool (not inside an uncommitted transaction)
-            let test_tx = sqlx::query!(
-                r#"
-                INSERT INTO l2_transactions (
-                    id, l1_tx_hash, status, created_at, updated_at,
-                    finalized_at, retry_count, error_reason, calldata, contract_address
-                ) VALUES (
-                    $1, $2, $3, NOW(), NOW(),
-                    NULL, 0, NULL, $4, $5
-                )
-                RETURNING id
-                "#,
-                "test-tx-id",
-                "0xdeadbeef",
-                "READY_TO_RELAY",
-                serde_json::json!({ "mock": "data" }),
-                "0xabc123"
-            )
-            .fetch_one(&pool)
-            .await
-            .expect("Failed to insert test transaction");
-        
-            // Call the function under test
-            let ready_txs = fetch_ready_transactions(&pool).await.expect("Failed to fetch");
-        
-            // Assert that the inserted transaction was returned
-            assert!(
-                ready_txs.iter().any(|tx| tx.id == test_tx.id),
-                "Expected transaction ID not found"
-            );
-        
-            // Clean up the inserted test data
-            sqlx::query!("DELETE FROM l2_transactions WHERE id = $1", test_tx.id)
-                .execute(&pool)
-                .await
-                .unwrap();
-        }
-        
- 
+async fn test_fetch_ready_transactions() {
+    let pool = create_test_db_pool().await;
+    let config = StarknetRelayerConfig::default(); // or load config accordingly
+
+    // Insert a test transaction directly via the pool
+    let test_tx = sqlx::query!(
+        r#"
+        INSERT INTO l2_transactions (
+            id, l1_tx_hash, status, created_at, updated_at,
+            finalized_at, retry_count, error_reason, calldata, contract_address
+        ) VALUES (
+            $1, $2, $3, NOW(), NOW(),
+            NULL, 0, NULL, $4, $5
+        )
+        RETURNING id
+        "#,
+        "test-tx-id",
+        "0xdeadbeef",
+        "READY_TO_RELAY",
+        serde_json::json!({ "mock": "data" }),
+        "0xabc123"
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("Failed to insert test transaction");
+
+    // Create relayer instance
+    let relayer = StarknetRelayer::new(pool.clone(), config)
+        .await
+        .expect("Failed to create relayer");
+
+    // Call the function under test
+    let ready_txs = relayer
+        .fetch_ready_transactions()
+        .await
+        .expect("Failed to fetch");
+
+    // Assert that the inserted transaction was returned
+    assert!(
+        ready_txs.iter().any(|tx| tx.id == test_tx.id),
+        "Expected transaction ID not found"
+    );
+
+    // Clean up the inserted test data
+    sqlx::query!("DELETE FROM l2_transactions WHERE id = $1", test_tx.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+}
+
         .expect("Failed to insert test transaction");
         
         // Create relayer config
@@ -107,11 +115,13 @@ async fn create_test_db_pool() -> Pool<Postgres> {
             transaction_timeout_ms: 30000,
         };
         
-        // Create a mock relayer with a customized fetch_ready_transactions method
-        let mock_relayer = MockStarknetRelayer::new(pool.clone(), config);
+        let mock_provider = MockStarknetProvider::new();
+        // configure mock_provider expectations...
         
-        // Execute the test
-        let transactions = mock_relayer.fetch_ready_transactions().await.unwrap();
+        let relayer = StarknetRelayer::new(mock_provider, pool.clone(), config);
+        
+        // now test real logic
+        let transactions = relayer.fetch_ready_transactions().await.unwrap();
         
         // Verify results
         assert_eq!(transactions.len(), 1);
