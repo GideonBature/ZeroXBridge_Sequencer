@@ -76,19 +76,12 @@ impl StarknetRelayer {
         let signer = LocalWallet::from(SigningKey::from_secret_scalar(private_key));
 
         // Parse contract address
-        let contract_address = FieldElement::from_hex_be(&config.bridge_contract_address)
-            .map_err(|_| StarknetRelayerError::InvalidContractAddress)?;
+        let account_address = signer.address();  // Or read from ENV
 
-        // Create Starknet account abstraction
-        let chain_id = provider
-            .chain_id()
-            .await
-            .map_err(StarknetRelayerError::Provider)?;
-        
         let account = SingleOwnerAccount::new(
             provider,
             signer,
-            contract_address,
+            account_address,  // Corrected to use account address
             chain_id,
         );
 
@@ -274,39 +267,71 @@ impl StarknetRelayer {
             calldata: vec![
                 withdrawal_id,
                 FieldElement::from_dec_str(&proof_array.len().to_string()).unwrap(),
-                // Add the proof array elements
-                proof_array.clone().into_iter()
-                    .collect::<Vec<FieldElement>>(),
-                merkle_root,
-            ].into_iter().flatten().collect(),
-        }];
-        
-        // Execute the transaction
-        let result = self.account
-            .execute(calls)
-            .send()
-            .await
-            .map_err(|e| StarknetRelayerError::Provider(e))?;
+                
+                // Initialize calldata with basic fields
+let mut calldata = vec![
+    withdrawal_id,
+    FieldElement::from_dec_str(&proof_array.len().to_string()).unwrap(),
+];
+
+// Extend calldata with proof array elements
+calldata.extend(proof_array.clone());
+
+// Add merkle root at the end
+calldata.push(merkle_root);
+
+// Create call to the L2 bridge contract
+let calls = vec![Call {
+    to: self.account.address(), // Correctly use account address or contract address if needed
+    selector: cairo_short_string_to_felt("process_withdrawal").unwrap(),
+    calldata,
+}];
+
         
         Ok(result.transaction_hash)
     }
 
     // Wait for transaction confirmation
-    async fn wait_for_transaction_confirmation(
-        &self,
-        tx_hash: FieldElement,
-    ) -> Result<(), StarknetRelayerError> {
-        let timeout = Duration::from_millis(self.config.transaction_timeout_ms);
-        let start_time = std::time::Instant::now();
-        
-        loop {
-            // Check if transaction has been confirmed
-            match self.account.provider().get_transaction_receipt(tx_hash).await {
-                Ok(receipt) => {
-                    // Transaction is confirmed
+async fn wait_for_transaction_confirmation(
+    &self,
+    tx_hash: FieldElement,
+) -> Result<(), StarknetRelayerError> {
+    let timeout = Duration::from_millis(self.config.transaction_timeout_ms);
+    let start_time = std::time::Instant::now();
+
+    loop {
+        // Check if transaction has been confirmed
+        match self.account.provider().get_transaction_receipt(tx_hash).await {
+            Ok(receipt) => {
+                // Check the receipt's status to ensure it's not reverted or rejected
+                if receipt.status == "ACCEPTED_ON_L2" {
+                    // Transaction is confirmed successfully
                     return Ok(());
+                } else {
+                    // Transaction failed (reverted/rejected)
+                    return Err(StarknetRelayerError::TransactionFailed(
+                        "Transaction failed or reverted.".to_string(),
+                    ));
                 }
-                Err(e) => {
+            }
+            Err(e) => {
+                // Handle any errors from the provider (e.g., network failure)
+                return Err(StarknetRelayerError::ProviderError(e.to_string()));
+            }
+        }
+
+        // Timeout check
+        if start_time.elapsed() > timeout {
+            return Err(StarknetRelayerError::TimeoutError(
+                "Transaction confirmation timed out.".to_string(),
+            ));
+        }
+
+        // Sleep for a short duration before retrying
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+}
+
                     // Check if we've exceeded the timeout
                     if start_time.elapsed() > timeout {
                         return Err(StarknetRelayerError::TransactionTimeout);
@@ -386,55 +411,13 @@ impl StarknetRelayer {
     }
 }
 
-// HTTP Transport implementation for JsonRpcClient
-struct HttpTransport {
-    url: String,
-}
+use starknet::providers::jsonrpc::{HttpTransport, JsonRpcClient}; // Import the upstream HttpTransport and JsonRpcClient
+use url::Url; // Import Url for proper URL parsing
 
-impl HttpTransport {
-    fn new(url: String) -> Self {
-        Self { url }
-    }
-}
+// Removed custom `Transport` trait and `HttpTransport` definition to avoid conflicts
 
-// Implement required traits for HttpTransport to work with JsonRpcClient
-impl Transport for HttpTransport {
-    fn post<T: serde::de::DeserializeOwned>(
-        &self,
-        request: serde_json::Value,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, ProviderError>> + Send>> {
-        let url = self.url.clone();
-        Box::pin(async move {
-            let client = reqwest::Client::new();
-            let response = client
-                .post(&url)
-                .json(&request)
-                .send()
-                .await
-                .map_err(|e| ProviderError::RateLimited(e.to_string()))?;
-            
-            let status = response.status();
-            let response_text = response
-                .text()
-                .await
-                .map_err(|e| ProviderError::RateLimited(e.to_string()))?;
-            
-            if !status.is_success() {
-                return Err(ProviderError::StarknetError(
-                    MaybeUnknownErrorCode::Unknown(response_text),
-                ));
-            }
-            
-            serde_json::from_str(&response_text)
-                .map_err(|e| ProviderError::SerdeError(e.to_string()))
-        })
-    }
-}
+// Initialize the transport using the upstream HttpTransport
+let transport = HttpTransport::new(Url::parse(&config.rpc_url)?);
 
-// Missing trait implementation for Transport
-pub trait Transport {
-    fn post<T: serde::de::DeserializeOwned>(
-        &self,
-        request: serde_json::Value,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, ProviderError>> + Send>>;
-}
+// Create the provider with the upstream JsonRpcClient and the custom transport
+let provider = JsonRpcClient::new(transport);

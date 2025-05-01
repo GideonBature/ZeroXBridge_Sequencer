@@ -21,17 +21,18 @@ mod tests {
         }
     }
     
-    // Helper function to create a test database pool
-    async fn create_test_db_pool() -> Pool<Postgres> {
-        let database_url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/testdb".to_string());
-        
-        sqlx::postgres::PgPoolOptions::new()
-            .max_connections(5)
-            .connect(&database_url)
-            .await
-            .expect("Failed to connect to database")
-    }
+  // Helper function to create a test database pool
+async fn create_test_db_pool() -> Pool<Postgres> {
+    let database_url = std::env::var("DATABASE_URL")
+        .expect("DATABASE_URL environment variable must be set for tests");
+
+    sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+        .expect("Failed to connect to database")
+}
+
     
     // Helper function to create sample L2Transaction
     fn create_sample_l2_transaction() -> L2Transaction {
@@ -50,33 +51,50 @@ mod tests {
                 "merkle_root": "0xabcdef123456789"
             }"#.to_string()),
         }
-    }
-    
-    #[tokio::test]
-    async fn test_fetch_ready_transactions() {
-        // Create database pool with a transaction
-        let pool = create_test_db_pool().await;
-        let mut tx = pool.begin().await.expect("Failed to begin transaction");
         
-        // Insert a test transaction
-        let test_tx = create_sample_l2_transaction();
-        sqlx::query!(
-            r#"
-            INSERT INTO l2_transactions 
-            (id, user_address, amount, token_address, status, created_at, updated_at, proof_data)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            "#,
-            test_tx.id,
-            test_tx.user_address,
-            test_tx.amount,
-            test_tx.token_address,
-            test_tx.status,
-            test_tx.created_at,
-            test_tx.updated_at,
-            test_tx.proof_data
-        )
-        .execute(&mut *tx)
-        .await
+        #[tokio::test]
+        async fn test_fetch_ready_transactions() {
+            let pool = create_test_db_pool().await;
+        
+            // Insert a test transaction directly via the pool (not inside an uncommitted transaction)
+            let test_tx = sqlx::query!(
+                r#"
+                INSERT INTO l2_transactions (
+                    id, l1_tx_hash, status, created_at, updated_at,
+                    finalized_at, retry_count, error_reason, calldata, contract_address
+                ) VALUES (
+                    $1, $2, $3, NOW(), NOW(),
+                    NULL, 0, NULL, $4, $5
+                )
+                RETURNING id
+                "#,
+                "test-tx-id",
+                "0xdeadbeef",
+                "READY_TO_RELAY",
+                serde_json::json!({ "mock": "data" }),
+                "0xabc123"
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("Failed to insert test transaction");
+        
+            // Call the function under test
+            let ready_txs = fetch_ready_transactions(&pool).await.expect("Failed to fetch");
+        
+            // Assert that the inserted transaction was returned
+            assert!(
+                ready_txs.iter().any(|tx| tx.id == test_tx.id),
+                "Expected transaction ID not found"
+            );
+        
+            // Clean up the inserted test data
+            sqlx::query!("DELETE FROM l2_transactions WHERE id = $1", test_tx.id)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        
+ 
         .expect("Failed to insert test transaction");
         
         // Create relayer config
@@ -132,10 +150,10 @@ mod tests {
         let test_tx = create_sample_l2_transaction();
         
         // Create a mock relayer with customized methods
-        let mock_relayer = MockStarknetRelayer::new_with_provider(pool.clone(), config, Arc::new(mock_provider));
+        let relayer = StarknetRelayer::new(pool.clone(), config, Arc::new(mock_provider));
         
         // Execute the test
-        let result = mock_relayer.process_transaction(test_tx.clone()).await;
+        let result = relayer.process_transaction(test_tx.clone()).await;
         
         // Verify results
         assert!(result.is_ok());

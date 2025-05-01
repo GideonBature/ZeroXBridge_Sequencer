@@ -30,6 +30,18 @@ CREATE TABLE deposits (
 -- Create L2 transactions table
 CREATE TABLE IF NOT EXISTS l2_transactions (
     id BIGSERIAL PRIMARY KEY,
+    user_address VARCHAR(42) NOT NULL,
+    amount NUMERIC(78, 0) NOT NULL,
+    token_address VARCHAR(42) NOT NULL,
+    status VARCHAR NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    tx_hash VARCHAR(66),
+    error TEXT,
+    proof_data TEXT
+);
+
+    id BIGSERIAL PRIMARY KEY,
     user_address VARCHAR NOT NULL,
     amount VARCHAR NOT NULL,
     token_address VARCHAR NOT NULL,

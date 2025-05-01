@@ -8,7 +8,7 @@ readme = "README.md"
 
 [dependencies]
 # Async runtime
-tokio = { version = "1.44.1", features = ["full", "macros", "rt-multi-thread"] }
+tokio = { version = "1.38", features = ["full", "macros", "rt-multi-thread"] }
 
 # Database
 sqlx = { version = "0.8.3", features = ["postgres", "runtime-tokio-rustls", "macros", "migrate", "uuid", "chrono", "json"] }
