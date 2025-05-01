@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::relayer::starknet_relayer::{StarknetRelayer, StarknetRelayerConfig};
-    use crate::queue::l2_queue::L2Transaction;
+    use zeroxbridge_sequencer::relayer::starknet_relayer::{StarknetRelayer, StarknetRelayerConfig};
+    use zeroxbridge_sequencer::queue::l2_queue::L2Transaction;    
     use mockall::predicate::*;
     use mockall::mock;
     use sqlx::{Pool, Postgres};
@@ -53,57 +53,51 @@ async fn create_test_db_pool() -> Pool<Postgres> {
         }
 
         #[tokio::test]
-async fn test_fetch_ready_transactions() {
-    let pool = create_test_db_pool().await;
-    let config = StarknetRelayerConfig::default(); // or load config accordingly
-
-    // Insert a test transaction directly via the pool
-    let test_tx = sqlx::query!(
-        r#"
-        INSERT INTO l2_transactions (
-            id, l1_tx_hash, status, created_at, updated_at,
-            finalized_at, retry_count, error_reason, calldata, contract_address
-        ) VALUES (
-            $1, $2, $3, NOW(), NOW(),
-            NULL, 0, NULL, $4, $5
-        )
-        RETURNING id
-        "#,
-        "test-tx-id",
-        "0xdeadbeef",
-        "READY_TO_RELAY",
-        serde_json::json!({ "mock": "data" }),
-        "0xabc123"
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("Failed to insert test transaction");
-
-    // Create relayer instance
-    let relayer = StarknetRelayer::new(pool.clone(), config)
-        .await
-        .expect("Failed to create relayer");
-
-    // Call the function under test
-    let ready_txs = relayer
-        .fetch_ready_transactions()
-        .await
-        .expect("Failed to fetch");
-
-    // Assert that the inserted transaction was returned
-    assert!(
-        ready_txs.iter().any(|tx| tx.id == test_tx.id),
-        "Expected transaction ID not found"
-    );
-
-    // Clean up the inserted test data
-    sqlx::query!("DELETE FROM l2_transactions WHERE id = $1", test_tx.id)
-        .execute(&pool)
-        .await
-        .unwrap();
-}
-
-        .expect("Failed to insert test transaction");
+        async fn test_fetch_ready_transactions() {
+            let pool = create_test_db_pool().await;
+            let config = StarknetRelayerConfig::default();
+        
+            let test_tx = sqlx::query!(
+                r#"
+                INSERT INTO l2_transactions (
+                    id, l1_tx_hash, status, created_at, updated_at,
+                    finalized_at, retry_count, error_reason, calldata, contract_address
+                ) VALUES (
+                    $1, $2, $3, NOW(), NOW(),
+                    NULL, 0, NULL, $4, $5
+                )
+                RETURNING id
+                "#,
+                "test-tx-id",
+                "0xdeadbeef",
+                "READY_TO_RELAY",
+                serde_json::json!({ "mock": "data" }),
+                "0xabc123"
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("Failed to insert test transaction");
+        
+            let relayer = StarknetRelayer::new(pool.clone(), config)
+                .await
+                .expect("Failed to create relayer");
+        
+            let ready_txs = relayer
+                .fetch_ready_transactions()
+                .await
+                .expect("Failed to fetch");
+        
+            assert!(
+                ready_txs.iter().any(|tx| tx.id == test_tx.id),
+                "Expected transaction ID not found"
+            );
+        
+            sqlx::query!("DELETE FROM l2_transactions WHERE id = $1", test_tx.id)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        
         
         // Create relayer config
         let config = StarknetRelayerConfig {
@@ -188,21 +182,23 @@ async fn test_fetch_ready_transactions() {
         let pool = create_test_db_pool().await;
         
         // Create a mock provider that fails twice then succeeds
-        let mut mock_provider = MockStarknetProvider::new();
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        
+        let call_counter = Arc::new(AtomicUsize::new(0));
+        let call_counter_clone = Arc::clone(&call_counter);
+        
         mock_provider
             .expect_execute_transaction()
-            .times(3)
-            .returning(|call_count| {
-                static mut CALL_COUNT: usize = 0;
-                unsafe {
-                    CALL_COUNT += 1;
-                    if CALL_COUNT <= 2 {
-                        Err("Temporary failure".to_string())
-                    } else {
-                        Ok("0xsuccesstxhash".to_string())
-                    }
+            .returning(move |_| {
+                let count = call_counter_clone.fetch_add(1, Ordering::SeqCst);
+                if count < 2 {
+                    Err("Temporary failure".to_string())
+                } else {
+                    Ok("0xsuccesstxhash".to_string())
                 }
             });
+        
         mock_provider
             .expect_get_transaction_receipt()
             .returning(|_| Ok(true));

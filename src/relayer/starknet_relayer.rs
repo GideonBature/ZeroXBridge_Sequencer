@@ -4,6 +4,17 @@ use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::time::sleep;
+use starknet::core::chain_id::MAINNET; // or TESTNET
+use starknet::providers::jsonrpc::HttpTransport;
+use starknet::providers::jsonrpc::JsonRpcClient;
+use url::Url;
+use starknet::providers::jsonrpc::{HttpTransport, JsonRpcClient};
+use starknet::accounts::{SingleOwnerAccount, LocalWallet};
+use starknet::core::types::{ChainId, FieldElement};
+use starknet::core::types::{TransactionReceipt, ExecutionStatus, MaybePendingTransactionReceipt};
+use starknet::providers::ProviderError;
+use starknet::core::types::ExecutionStatus::Succeeded;
+use starknet::signers::SigningKey;
 use tracing::{debug, error, info, warn};
 use starknet::{
     core::{
@@ -23,25 +34,36 @@ use starknet::{
 pub enum StarknetRelayerError {
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
-    
+
     #[error("Provider error: {0}")]
     Provider(#[from] ProviderError),
-    
+
     #[error("Transaction not found")]
     TransactionNotFound,
-    
+
     #[error("Proof data missing")]
     ProofDataMissing,
-    
+
     #[error("Invalid contract address")]
     InvalidContractAddress,
-    
+
     #[error("Transaction failed: {0}")]
     TransactionFailed(String),
-    
+
     #[error("Transaction timeout")]
     TransactionTimeout,
+
+    // ✅ Add these if they're used
+    #[error("Selector parse failed")]
+    SelectorParseFailed,
+
+    #[error("Request timed out")]
+    Timeout,
+
+    #[error("Timeout error: {0}")]
+    TimeoutError(String),
 }
+
 
 // Configuration for the Starknet Relayer
 #[derive(Debug, Clone)]
@@ -61,53 +83,33 @@ pub struct StarknetRelayer {
     account: SingleOwnerAccount<JsonRpcClient, LocalWallet>,
 }
 
-impl StarknetRelayer {
-    // Initialize a new StarknetRelayer
-    pub async fn new(
-        db_pool: Pool<Postgres>,
-        config: StarknetRelayerConfig,
-    ) -> Result<Self, StarknetRelayerError> {
+pub async fn new(
+    db_pool: Pool<Postgres>,
+    config: StarknetRelayerConfig,
+) -> Result<Self, StarknetRelayerError> {
+    let provider = JsonRpcClient::new(HttpTransport::new(config.rpc_url.clone()));
 
-        // Import necessary modules
-use starknet::core::chain_id::MAINNET; // or TESTNET depending on your environment
-use starknet::providers::jsonrpc::HttpTransport;
-use starknet::providers::jsonrpc::JsonRpcClient;
+    let private_key = FieldElement::from_hex_be(&config.private_key)
+        .map_err(|_| StarknetRelayerError::TransactionFailed("Invalid private key".into()))?;
+    let signer = LocalWallet::from(SigningKey::from_secret_scalar(private_key));
 
-// Begin implementation block for StarknetRelayer
-impl StarknetRelayer {
-    pub async fn new(
-        db_pool: Pool<Postgres>,
-        config: StarknetRelayerConfig,
-    ) -> Result<Self, StarknetRelayerError> {
-        // Your logic to create a new StarknetRelayer instance
-    }
+    let account_address = signer.address();
+    let chain_id = MAINNET; // Set according to your environment
+
+    let account = SingleOwnerAccount::new(
+        provider,
+        signer,
+        account_address,
+        chain_id,
+    );
+
+    Ok(Self {
+        db_pool,
+        config,
+        account,
+    })
 }
 
-        // Create JsonRpcClient provider
-let provider = JsonRpcClient::new(HttpTransport::new(config.rpc_url.clone()));
-
-// Parse private key to create a signer
-let private_key = FieldElement::from_hex_be(&config.private_key)
-    .map_err(|_| StarknetRelayerError::InvalidContractAddress)?;
-let signer = LocalWallet::from(SigningKey::from_secret_scalar(private_key));
-
-// Parse contract address
-let account_address = signer.address();  // Or read from ENV
-
-let account = SingleOwnerAccount::new(
-    provider,
-    signer,
-    account_address,  // Corrected to use account address
-    chain_id,
-);
-
-
-        Ok(Self {
-            db_pool,
-            config,
-            account,
-        })
-    }
 
     // Main function to start the relayer process
     pub async fn start(&self) -> Result<(), StarknetRelayerError> {
@@ -304,12 +306,9 @@ let calls = vec![Call {
         
         Ok(result.transaction_hash)
     }
-
-    // Wait for transaction confirmation
-    use starknet::core::types::{TransactionReceipt, ExecutionStatus, MaybePendingTransactionReceipt};
-    use starknet::providers::ProviderError;
-    use starknet::core::types::ExecutionStatus::Succeeded;
     
+    // Wait for transaction confirmation
+
     async fn wait_for_transaction_confirmation(
         &self,
         tx_hash: FieldElement,
@@ -318,9 +317,10 @@ let calls = vec![Call {
         let start_time = std::time::Instant::now();
     
         loop {
+            // Timeout check
             if start_time.elapsed() > timeout {
                 return Err(StarknetRelayerError::Timeout(
-                    "Transaction confirmation timed out".to_string(),
+                    "Transaction confirmation timed out.".to_string(),
                 ));
             }
     
@@ -349,10 +349,11 @@ let calls = vec![Call {
                 Err(e) => return Err(StarknetRelayerError::Provider(e.into())),
             }
     
+            // Sleep for a short duration before retrying
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
     }
-
+    
         // Timeout check
         if start_time.elapsed() > timeout {
             return Err(StarknetRelayerError::TimeoutError(
@@ -428,29 +429,24 @@ let calls = vec![Call {
 }
 
 impl StarknetRelayer {
-    // Initialize a new StarknetRelayer
     pub async fn new(
         db_pool: Pool<Postgres>,
         config: StarknetRelayerConfig,
     ) -> Result<Self, StarknetRelayerError> {
-        // Initialize the transport using the upstream HttpTransport
         let transport = HttpTransport::new(Url::parse(&config.rpc_url)?);
-
-        // Create the provider with the upstream JsonRpcClient and the custom transport
         let provider = JsonRpcClient::new(transport);
 
-        // Parse private key to create a signer
         let private_key = FieldElement::from_hex_be(&config.private_key)
             .map_err(|_| StarknetRelayerError::InvalidContractAddress)?;
         let signer = LocalWallet::from(SigningKey::from_secret_scalar(private_key));
+        let account_address = signer.address();
 
-        // Parse contract address
-        let account_address = signer.address();  // Or read from ENV
+        let chain_id = ChainId::Mainnet; // or Testnet as per your setup
 
         let account = SingleOwnerAccount::new(
             provider,
             signer,
-            account_address,  // Corrected to use account address
+            account_address,
             chain_id,
         );
 
@@ -461,3 +457,4 @@ impl StarknetRelayer {
         })
     }
 }
+
