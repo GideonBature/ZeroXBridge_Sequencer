@@ -10,5 +10,9 @@ pub mod queue {
     pub mod l2_queue;
 }
 
+pub mod relayer {
+    pub mod ethereum_relayer;
+}
+
 pub mod events;
 pub mod proof_generator;

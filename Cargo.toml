@@ -45,6 +45,12 @@ dotenv = "0.15"
 uuid = { version = "1.7.0", features = ["v4", "serde"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 sha2 = "0.10"
+alloy-json-rpc = "0.15.6"
+alloy-primitives = "1.0.0"
+alloy-rpc-client = "0.15.6"
+alloy-transport-http = "0.15.6"
+url = "2.5.4"
+alloy-sol-types = "1.0.0"
 hex = "0.4"
 rand = "0.8"
 
