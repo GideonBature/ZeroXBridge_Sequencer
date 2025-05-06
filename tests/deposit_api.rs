@@ -1,7 +1,12 @@
-use axum::{body::Body, http::{Request, StatusCode}};
+#[path = "utils.rs"]
+mod utils;
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+};
 use serde_json::json;
 use tower::ServiceExt;
-use zero_x_bridge_sequencer::api::routes::create_test_app;
+use utils::create_test_app;
 
 #[tokio::test]
 async fn test_post_valid_deposit() {
@@ -15,14 +20,17 @@ async fn test_post_valid_deposit() {
             json!({
                 "user_address": "0xuser123",
                 "amount": 1000
-            }).to_string(),
+            })
+            .to_string(),
         ))
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(parsed.get("commitment_hash").is_some());
 }
@@ -39,7 +47,8 @@ async fn test_post_invalid_deposit() {
             json!({
                 "user_address": "",
                 "amount": -100
-            }).to_string(),
+            })
+            .to_string(),
         ))
         .unwrap();
 
@@ -60,7 +69,8 @@ async fn test_get_pending_deposits() {
             json!({
                 "user_address": "0xtest123",
                 "amount": 500
-            }).to_string(),
+            })
+            .to_string(),
         ))
         .unwrap();
 
@@ -76,7 +86,9 @@ async fn test_get_pending_deposits() {
     let response = app.oneshot(get_request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let parsed: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
     assert!(!parsed.is_empty());
     assert_eq!(parsed[0]["status"], "pending");

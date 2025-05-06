@@ -1,82 +1,102 @@
-use sqlx::PgPool;
+use sqlx::{Pool, Postgres};
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
+use chrono::{DateTime, Utc};
+use serde::{Serialize, Deserialize};
+use thiserror::Error;
 
-use crate::config::QueueConfig;
-use crate::db::database::{
-    fetch_pending_withdrawals, process_withdrawal_retry, update_withdrawal_status, Withdrawal,
-};
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct L2Transaction {
+    pub id: i64,
+    pub user_address: String,
+    pub amount: String,
+    pub token_address: String,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub tx_hash: Option<String>,
+    pub error: Option<String>,
+    pub proof_data: Option<String>,
+    pub retry_count: Option<i32>,
+}
 
-#[derive(Debug, thiserror::Error)]
-enum ValidationError {
+#[derive(Debug, Error)]
+pub enum L2QueueError {
     #[error("Database error: {0}")]
-    DatabaseError(#[from] sqlx::Error),
+    Database(#[from] sqlx::Error),
 
-    #[error("RPC error: {0}")]
-    RpcError(String),
+    #[error("Transaction not found: {0}")]
+    TransactionNotFound(i64),
 
-    #[error("Invalid commitment format")]
-    InvalidCommitment,
+    #[error("Invalid transaction status: {0}")]
+    InvalidStatus(String),
+
+    #[error("Missing proof data")]
+    MissingProofData,
 
     #[error("Commitment not yet found on L2")]
     CommitmentPending,
 
-    #[error("Commitment not found after max retries")]
+    #[error("Max retries exceeded")]
     MaxRetriesExceeded,
 }
 
+pub struct QueueConfig {
+    pub process_interval_sec: u64,
+    pub initial_retry_delay_sec: u64,
+    pub max_retries: u32,
+    pub batch_size: i64,
+}
+
 pub struct L2Queue {
-    db_pool: PgPool,
+    db_pool: Pool<Postgres>,
     config: QueueConfig,
 }
 
 impl L2Queue {
-    pub fn new(db_pool: PgPool, config: QueueConfig) -> Self {
+    pub fn new(db_pool: Pool<Postgres>, config: QueueConfig) -> Self {
         Self { db_pool, config }
     }
 
     pub async fn run(&self) {
         loop {
-            match self.process_withdrawals().await {
-                Ok(_) => info!("Completed processing cycle"),
-                Err(e) => error!("Processing cycle failed: {:?}", e),
+            match self.process_transactions().await {
+                Ok(_) => info!("Processing cycle completed."),
+                Err(e) => error!("Processing failed: {:?}", e),
             }
             sleep(Duration::from_secs(self.config.process_interval_sec)).await;
         }
     }
 
-    async fn process_withdrawals(&self) -> Result<(), sqlx::Error> {
-        let withdrawals = fetch_pending_withdrawals(&self.db_pool, self.config.max_retries).await?;
+    async fn process_transactions(&self) -> Result<(), L2QueueError> {
+        let transactions = self.get_pending_transactions_for_proof(self.config.batch_size).await?;
 
-        for withdrawal in withdrawals {
-            let mut tx = self.db_pool.begin().await?;
+        for tx in transactions {
+            let mut tx_handle = self.db_pool.begin().await?;
 
-            // Apply processing delay
+            // Optional delay
             sleep(Duration::from_secs(self.config.initial_retry_delay_sec)).await;
 
-            match self.validate_withdrawal(&withdrawal).await {
-                Ok(()) => {
-                    info!("Withdrawal {} validated successfully", withdrawal.id);
-                    update_withdrawal_status(&mut tx, withdrawal.id, "processing").await?;
-                    tx.commit().await?;
+            match self.validate_transaction(&tx).await {
+                Ok(proof) => {
+                    self.mark_transaction_ready_for_relay(tx.id, &proof).await?;
+                    tx_handle.commit().await?;
                 }
-                Err(ValidationError::CommitmentPending) => {
-                    warn!("Withdrawal {} not yet found on L1. Will retry.", deposit.id);
-                    process_withdrawal_retry(&mut tx, withdrawal.id).await?;
-                    tx.commit().await?;
+                Err(L2QueueError::CommitmentPending) => {
+                    warn!("Commitment pending for tx {}", tx.id);
+                    self.increment_retry_count(tx.id).await?;
+                    tx_handle.commit().await?;
                 }
-                Err(ValidationError::MaxRetriesExceeded) => {
-                    error!(
-                        "Withdrawal {} failed after max retries. Marking as failed.",
-                        deposit.id
-                    );
-                    update_withdrawal_status(&mut tx, withdrawal.id, "failed").await?;
+                Err(L2QueueError::MaxRetriesExceeded) => {
+                    error!("Max retries hit for tx {}. Marking failed.", tx.id);
+                    self.update_transaction_status(tx.id, "failed", Some("Max retries exceeded")).await?;
+                    tx_handle.commit().await?;
                 }
                 Err(e) => {
-                    warn!("Deposit {} hit an error: {:?}. Will retry.", deposit.id, e);
-                    update_withdrawal_status(&mut tx, withdrawal.id, "failed").await?;
-                    tx.commit().await?;
+                    error!("Unexpected error for tx {}: {:?}", tx.id, e);
+                    self.update_transaction_status(tx.id, "failed", Some(&e.to_string())).await?;
+                    tx_handle.commit().await?;
                 }
             }
         }
@@ -84,29 +104,121 @@ impl L2Queue {
         Ok(())
     }
 
-    async fn validate_withdrawal(&self, withdrawal: &Withdrawal) -> Result<(), ValidationError> {
-        // Check commitment exists on L2
-        let commitment_exists = self
-            .check_l2_commitment(withdrawal.commitment_hash.clone())
-            .await?;
+    async fn validate_transaction(&self, tx: &L2Transaction) -> Result<String, L2QueueError> {
+        trace!("Validating tx: {}", tx.id);
 
-        if !commitment_exists {
-            if withdrawal.retry_count + 1 >= self.config.max_retries.try_into().unwrap() {
-                return Err(ValidationError::MaxRetriesExceeded);
+        let proof_data = self.check_l2_commitment(tx).await?;
+
+        if let Some(proof) = proof_data {
+            Ok(proof)
+        } else {
+            let retry_count = tx.retry_count.unwrap_or(0);
+            if retry_count + 1 >= self.config.max_retries as i32 {
+                Err(L2QueueError::MaxRetriesExceeded)
             } else {
-                return Err(ValidationError::CommitmentPending);
+                Err(L2QueueError::CommitmentPending)
             }
+        }
+    }
+
+    async fn check_l2_commitment(&self, tx: &L2Transaction) -> Result<Option<String>, L2QueueError> {
+        // Mocked success
+        trace!("Checking commitment for tx {}", tx.id);
+
+        // Example logic - replace with real L2 check
+        if tx.id % 2 == 0 {
+            Ok(Some("mocked_proof_data".into()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn increment_retry_count(&self, id: i64) -> Result<(), L2QueueError> {
+        sqlx::query!(
+            r#"
+            UPDATE l2_transactions
+            SET retry_count = COALESCE(retry_count, 0) + 1, updated_at = NOW()
+            WHERE id = $1
+            "#,
+            id
+        )
+        .execute(&self.db_pool)
+        .await
+        .map_err(L2QueueError::Database)?;
+
+        Ok(())
+    }
+
+    async fn mark_transaction_ready_for_relay(&self, id: i64, proof_data: &str) -> Result<(), L2QueueError> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE l2_transactions
+            SET status = 'ready_for_relay', proof_data = $1, updated_at = NOW()
+            WHERE id = $2 AND status = 'pending'
+            "#,
+            proof_data,
+            id
+        )
+        .execute(&self.db_pool)
+        .await
+        .map_err(L2QueueError::Database)?;
+
+        if result.rows_affected() == 0 {
+            return Err(L2QueueError::TransactionNotFound(id));
         }
 
         Ok(())
     }
 
-    async fn check_l2_commitment(&self, commitment_hash: String) -> Result<bool, ValidationError> {
-        // Check l2 event logs for commitment hash
-        // Assuming we have a function `get_event_logs` that fetches event logs from L2
-        // we store last index so we don't have to fetch all logs every time
+    async fn update_transaction_status(&self, id: i64, status: &str, error: Option<&str>) -> Result<(), L2QueueError> {
+        let result = match error {
+            Some(err) => sqlx::query!(
+                r#"
+                UPDATE l2_transactions
+                SET status = $1, error = $2, updated_at = NOW()
+                WHERE id = $3
+                "#,
+                status,
+                err,
+                id
+            )
+            .execute(&self.db_pool)
+            .await,
+            None => sqlx::query!(
+                r#"
+                UPDATE l2_transactions
+                SET status = $1, updated_at = NOW()
+                WHERE id = $2
+                "#,
+                status,
+                id
+            )
+            .execute(&self.db_pool)
+            .await,
+        };
 
-        trace!("Checking L2 commitment for hash: {}", commitment_hash);
-        Ok(true)
+        if result.map_err(L2QueueError::Database)?.rows_affected() == 0 {
+            return Err(L2QueueError::TransactionNotFound(id));
+        }
+
+        Ok(())
+    }
+
+    async fn get_pending_transactions_for_proof(&self, limit: i64) -> Result<Vec<L2Transaction>, L2QueueError> {
+        let transactions = sqlx::query_as!(
+            L2Transaction,
+            r#"
+            SELECT * FROM l2_transactions
+            WHERE status = 'pending'
+            ORDER BY created_at ASC
+            LIMIT $1
+            "#,
+            limit
+        )
+        .fetch_all(&self.db_pool)
+        .await
+        .map_err(L2QueueError::Database)?;
+
+        Ok(transactions)
     }
 }

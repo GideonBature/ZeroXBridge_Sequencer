@@ -1,4 +1,7 @@
 /target
+/src/http/crates
+/src/http/target
 .qodo
 .env
 .gitignore
+/tmp
