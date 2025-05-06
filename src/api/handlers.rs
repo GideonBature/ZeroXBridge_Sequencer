@@ -16,7 +16,7 @@ pub struct CreateWithdrawalRequest {
 
 #[derive(Serialize, Deserialize)]
 pub struct DepositRequest {
-    pub user_address: String,
+    pub stark_pub_key: String,
     pub amount: i64,
     pub commitment_hash: String,
 }
@@ -35,12 +35,12 @@ pub async fn handle_deposit_post(
     Extension(pool): Extension<PgPool>,
     Json(payload): Json<DepositRequest>,
 ) -> Result<Json<DepositResponse>, (StatusCode, String)> {
-    if payload.amount <= 0 || payload.user_address.trim().is_empty() {
+    if payload.amount <= 0 || payload.stark_pub_key.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, "Invalid input".to_string()));
     }
     let deposit_id = insert_deposit(
         &pool,
-        &payload.user_address,
+        &payload.stark_pub_key,
         payload.amount,
         &payload.commitment_hash,
     )

@@ -1,8 +1,9 @@
--- Create deposits table
-CREATE TABLE IF NOT EXISTS deposits (
+-- Create withdrawals handler table
+CREATE TABLE IF NOT EXISTS withdrawals (
     id SERIAL PRIMARY KEY,
-    user_address TEXT NOT NULL,
+    stark_pub_key TEXT NOT NULL,
     amount BIGINT NOT NULL,
+    l1_token TEXT NOT NULL,
     l2_tx_id INTEGER,
     commitment_hash TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
@@ -12,9 +13,9 @@ CREATE TABLE IF NOT EXISTS deposits (
 );
 
 -- Create deposit_proofs table
-CREATE TABLE IF NOT EXISTS deposit_proofs (
+CREATE TABLE IF NOT EXISTS withdrawal_proofs (
     id SERIAL PRIMARY KEY,
-    deposit_id INTEGER REFERENCES deposits(id),
+    withdrawal_id INTEGER REFERENCES withdrawals(id),
     proof_params BYTEA,
     proof_data BYTEA,
     status TEXT NOT NULL DEFAULT 'ready',

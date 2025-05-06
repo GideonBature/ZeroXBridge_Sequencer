@@ -1,5 +1,5 @@
 [package]
-name = "zero_x_bridge_sequencer"
+name = "zeroxbridge_sequencer"
 version = "0.1.0"
 edition = "2021"
 authors = ["ZeroXBridge Team <info@zeroxbridge.com>"]
@@ -53,6 +53,7 @@ url = "2.5.4"
 alloy-sol-types = "1.0.0"
 hex = "0.4"
 rand = "0.8"
+config = "0.15.11"
 
 # Testing & mocking
 mockall = "0.13.1"

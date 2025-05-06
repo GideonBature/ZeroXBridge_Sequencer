@@ -1,16 +1,16 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
 use std::time::Duration;
-use tokio::time::sleep;
-use tracing::{debug, error, info, trace, warn};
-use chrono::{DateTime, Utc};
-use serde::{Serialize, Deserialize};
 use thiserror::Error;
+use tokio::time::sleep;
+use tracing::{error, info, trace, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct L2Transaction {
     pub id: i64,
-    pub user_address: String,
-    pub amount: String,
+    pub stark_pub_key: String,
+    pub amount: i64,
     pub token_address: String,
     pub status: String,
     pub created_at: DateTime<Utc>,
@@ -18,7 +18,7 @@ pub struct L2Transaction {
     pub tx_hash: Option<String>,
     pub error: Option<String>,
     pub proof_data: Option<String>,
-    pub retry_count: Option<i32>,
+    pub retry_count: i32,
 }
 
 #[derive(Debug, Error)]
@@ -70,10 +70,12 @@ impl L2Queue {
     }
 
     async fn process_transactions(&self) -> Result<(), L2QueueError> {
-        let transactions = self.get_pending_transactions_for_proof(self.config.batch_size).await?;
+        let transactions = self
+            .get_pending_transactions_for_proof(self.config.batch_size)
+            .await?;
 
         for tx in transactions {
-            let mut tx_handle = self.db_pool.begin().await?;
+            let tx_handle = self.db_pool.begin().await?;
 
             // Optional delay
             sleep(Duration::from_secs(self.config.initial_retry_delay_sec)).await;
@@ -90,12 +92,14 @@ impl L2Queue {
                 }
                 Err(L2QueueError::MaxRetriesExceeded) => {
                     error!("Max retries hit for tx {}. Marking failed.", tx.id);
-                    self.update_transaction_status(tx.id, "failed", Some("Max retries exceeded")).await?;
+                    self.update_transaction_status(tx.id, "failed", Some("Max retries exceeded"))
+                        .await?;
                     tx_handle.commit().await?;
                 }
                 Err(e) => {
                     error!("Unexpected error for tx {}: {:?}", tx.id, e);
-                    self.update_transaction_status(tx.id, "failed", Some(&e.to_string())).await?;
+                    self.update_transaction_status(tx.id, "failed", Some(&e.to_string()))
+                        .await?;
                     tx_handle.commit().await?;
                 }
             }
@@ -112,7 +116,7 @@ impl L2Queue {
         if let Some(proof) = proof_data {
             Ok(proof)
         } else {
-            let retry_count = tx.retry_count.unwrap_or(0);
+            let retry_count = tx.retry_count;
             if retry_count + 1 >= self.config.max_retries as i32 {
                 Err(L2QueueError::MaxRetriesExceeded)
             } else {
@@ -121,7 +125,10 @@ impl L2Queue {
         }
     }
 
-    async fn check_l2_commitment(&self, tx: &L2Transaction) -> Result<Option<String>, L2QueueError> {
+    async fn check_l2_commitment(
+        &self,
+        tx: &L2Transaction,
+    ) -> Result<Option<String>, L2QueueError> {
         // Mocked success
         trace!("Checking commitment for tx {}", tx.id);
 
@@ -149,7 +156,11 @@ impl L2Queue {
         Ok(())
     }
 
-    async fn mark_transaction_ready_for_relay(&self, id: i64, proof_data: &str) -> Result<(), L2QueueError> {
+    async fn mark_transaction_ready_for_relay(
+        &self,
+        id: i64,
+        proof_data: &str,
+    ) -> Result<(), L2QueueError> {
         let result = sqlx::query!(
             r#"
             UPDATE l2_transactions
@@ -170,31 +181,40 @@ impl L2Queue {
         Ok(())
     }
 
-    async fn update_transaction_status(&self, id: i64, status: &str, error: Option<&str>) -> Result<(), L2QueueError> {
+    async fn update_transaction_status(
+        &self,
+        id: i64,
+        status: &str,
+        error: Option<&str>,
+    ) -> Result<(), L2QueueError> {
         let result = match error {
-            Some(err) => sqlx::query!(
-                r#"
+            Some(err) => {
+                sqlx::query!(
+                    r#"
                 UPDATE l2_transactions
                 SET status = $1, error = $2, updated_at = NOW()
                 WHERE id = $3
                 "#,
-                status,
-                err,
-                id
-            )
-            .execute(&self.db_pool)
-            .await,
-            None => sqlx::query!(
-                r#"
+                    status,
+                    err,
+                    id
+                )
+                .execute(&self.db_pool)
+                .await
+            }
+            None => {
+                sqlx::query!(
+                    r#"
                 UPDATE l2_transactions
                 SET status = $1, updated_at = NOW()
                 WHERE id = $2
                 "#,
-                status,
-                id
-            )
-            .execute(&self.db_pool)
-            .await,
+                    status,
+                    id
+                )
+                .execute(&self.db_pool)
+                .await
+            }
         };
 
         if result.map_err(L2QueueError::Database)?.rows_affected() == 0 {
@@ -204,7 +224,10 @@ impl L2Queue {
         Ok(())
     }
 
-    async fn get_pending_transactions_for_proof(&self, limit: i64) -> Result<Vec<L2Transaction>, L2QueueError> {
+    async fn get_pending_transactions_for_proof(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<L2Transaction>, L2QueueError> {
         let transactions = sqlx::query_as!(
             L2Transaction,
             r#"
