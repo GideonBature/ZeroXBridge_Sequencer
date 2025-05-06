@@ -9,4 +9,6 @@ pub mod queue {
     pub mod l1_queue;
     pub mod l2_queue;
 }
+
+pub mod events;
 pub mod proof_generator;

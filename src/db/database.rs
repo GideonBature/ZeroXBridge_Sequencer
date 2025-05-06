@@ -184,3 +184,38 @@ pub async fn update_withdrawal_status(
 
     Ok(())
 }
+
+pub async fn update_last_processed_block(
+    conn: &mut PgConnection,
+    key: &str,
+    block_number: u64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        INSERT INTO block_trackers (key, last_block)
+        VALUES ($1, $2)
+        ON CONFLICT (key) DO UPDATE
+        SET last_block = $2, updated_at = NOW()
+        "#,
+        key,
+        block_number as i64
+    )
+    .execute(conn)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn get_last_processed_block(conn: &mut PgConnection, key: &str) -> Result<Option<u64>, sqlx::Error> {
+    let record = sqlx::query!(
+        r#"
+        SELECT last_block FROM block_trackers
+        WHERE key = $1
+        "#,
+        key
+    )
+    .fetch_optional(conn)
+    .await?;
+
+    Ok(record.map(|r| r.last_block as u64))
+}
