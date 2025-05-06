@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgConnection, PgPool};
 
@@ -8,17 +8,18 @@ pub struct Withdrawal {
     pub stark_pub_key: String,
     pub amount: i64,
     pub l1_token: String,
+    pub l2_tx_id: Option<i32>,
     pub commitment_hash: String,
     pub status: String,
     pub retry_count: i32,
-    pub created_at: Option<DateTime<Utc>>,
-    pub updated_at: Option<DateTime<Utc>>,
+    pub created_at: Option<NaiveDateTime>,
+    pub updated_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, FromRow, Serialize, Deserialize)]
 pub struct Deposit {
     pub id: i32,
-    pub user_address: String,
+    pub stark_pub_key: String,
     pub amount: i64,
     pub commitment_hash: String,
     pub status: String, // "pending", "processed", etc.
@@ -51,17 +52,17 @@ pub async fn insert_withdrawal(
 
 pub async fn insert_deposit(
     conn: &PgPool,
-    user_address: &str,
+    stark_pub_key: &str,
     amount: i64,
     commitment_hash: &str,
 ) -> Result<i32, sqlx::Error> {
     let row_id = sqlx::query_scalar!(
         r#"
-        INSERT INTO deposits (user_address, amount, commitment_hash, status)
+        INSERT INTO deposits (stark_pub_key, amount, commitment_hash, status)
         VALUES ($1, $2, $3, 'pending')
         RETURNING id
         "#,
-        user_address,
+        stark_pub_key,
         amount,
         commitment_hash
     )
@@ -206,7 +207,10 @@ pub async fn update_last_processed_block(
     Ok(())
 }
 
-pub async fn get_last_processed_block(conn: &mut PgConnection, key: &str) -> Result<Option<u64>, sqlx::Error> {
+pub async fn get_last_processed_block(
+    conn: &mut PgConnection,
+    key: &str,
+) -> Result<Option<u64>, sqlx::Error> {
     let record = sqlx::query!(
         r#"
         SELECT last_block FROM block_trackers

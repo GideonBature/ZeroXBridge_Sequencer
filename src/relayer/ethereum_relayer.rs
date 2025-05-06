@@ -14,7 +14,7 @@ sol! {
     function unlock_funds_with_proof(
         uint256[] calldata proofParams,
         uint256[] calldata proof,
-        address user,
+        uint256 stark_pub_key,
         uint256 amount,
         uint256 l2TxId,
         bytes32 commitmentHash
@@ -39,11 +39,11 @@ pub enum RelayerError {
     ProofFetchFailed(String),
 }
 
-/// Data structure for deposit with proof
+/// Data structure for withdrawal with proof
 #[derive(Debug)]
-pub struct DepositWithProof {
-    pub deposit_id: i32,
-    pub user_address: String,
+pub struct WithdrawalWithProof {
+    pub withdrawal_id: i32,
+    pub stark_pub_key: String,
     pub amount: i64,
     pub l2_tx_id: String,
     pub commitment_hash: String,
@@ -94,35 +94,35 @@ impl EthereumRelayer {
 
     /// Process transactions that are ready to be relayed
     async fn process_relay_transactions(&self) -> Result<(), RelayerError> {
-        let deposits_to_relay = self.fetch_ready_for_relay_deposits().await?;
+        let withdrawals_to_relay = self.fetch_ready_for_relay_withdrawals().await?;
 
-        for deposit in deposits_to_relay {
+        for withdrawal in withdrawals_to_relay {
             let mut tx = self.db_pool.begin().await?;
 
-            match self.relay_transaction(&deposit).await {
+            match self.relay_transaction(&withdrawal).await {
                 Ok(_) => {
                     info!(
-                        "Successfully relayed transaction for deposit {}",
-                        deposit.deposit_id
+                        "Successfully relayed transaction for withdrawal {}",
+                        withdrawal.withdrawal_id
                     );
-                    self.update_deposit_status(&mut tx, deposit.deposit_id, "relayed")
+                    self.update_withdrawal_status(&mut tx, withdrawal.withdrawal_id, "relayed")
                         .await?;
                 }
                 Err(e) => {
-                    let retry_count = self.get_retry_count(&deposit.deposit_id).await?;
+                    let retry_count = self.get_retry_count(&withdrawal.withdrawal_id).await?;
                     if retry_count >= self.config.max_retries as i32 - 1 {
                         error!(
-                            "Max retries reached for deposit {}. Marking as failed: {:?}",
-                            deposit.deposit_id, e
+                            "Max retries reached for withdrawal {}. Marking as failed: {:?}",
+                            withdrawal.withdrawal_id, e
                         );
-                        self.update_deposit_status(&mut tx, deposit.deposit_id, "failed")
+                        self.update_withdrawal_status(&mut tx, withdrawal.withdrawal_id, "failed")
                             .await?;
                     } else {
                         warn!(
-                            "Failed to relay transaction for deposit {}. Will retry: {:?}",
-                            deposit.deposit_id, e
+                            "Failed to relay transaction for withdrawal {}. Will retry: {:?}",
+                            withdrawal.withdrawal_id, e
                         );
-                        self.increment_retry_count(&mut tx, deposit.deposit_id)
+                        self.increment_retry_count(&mut tx, withdrawal.withdrawal_id)
                             .await?;
                     }
                 }
@@ -137,14 +137,14 @@ impl EthereumRelayer {
         Ok(())
     }
 
-    /// Get the retry count for a deposit
-    async fn get_retry_count(&self, deposit_id: &i32) -> Result<i32, RelayerError> {
+    /// Get the retry count for a withdrawal
+    async fn get_retry_count(&self, withdrawal_id: &i32) -> Result<i32, RelayerError> {
         let retry_count = sqlx::query!(
             r#"
-            SELECT retry_count FROM deposits
+            SELECT retry_count FROM withdrawals
             WHERE id = $1
             "#,
-            deposit_id
+            withdrawal_id
         )
         .fetch_one(&self.db_pool)
         .await?
@@ -153,14 +153,16 @@ impl EthereumRelayer {
         Ok(retry_count)
     }
 
-    /// Fetch deposits that are ready to be relayed with their proofs
-    async fn fetch_ready_for_relay_deposits(&self) -> Result<Vec<DepositWithProof>, RelayerError> {
+    /// Fetch withdrawals that are ready to be relayed with their proofs
+    async fn fetch_ready_for_relay_withdrawals(
+        &self,
+    ) -> Result<Vec<WithdrawalWithProof>, RelayerError> {
         let records = sqlx::query!(
             r#"
-            SELECT d.id, d.user_address, d.amount, d.l2_tx_id, d.commitment_hash, 
+            SELECT d.id, d.stark_pub_key, d.amount, d.l2_tx_id, d.commitment_hash, 
                   dp.proof_params, dp.proof_data 
-            FROM deposits d
-            JOIN deposit_proofs dp ON d.id = dp.deposit_id
+            FROM withdrawals d
+            JOIN withdrawal_proofs dp ON d.id = dp.withdrawal_id
             WHERE d.status = 'ready_for_relay' AND d.retry_count < $1 AND dp.status = 'ready'
             ORDER BY d.created_at ASC
             LIMIT 10
@@ -170,11 +172,11 @@ impl EthereumRelayer {
         .fetch_all(&self.db_pool)
         .await?;
 
-        let deposits_with_proofs = records
+        let withdrawals_with_proofs = records
             .into_iter()
-            .map(|row| DepositWithProof {
-                deposit_id: row.id,
-                user_address: row.user_address,
+            .map(|row| WithdrawalWithProof {
+                withdrawal_id: row.id,
+                stark_pub_key: row.stark_pub_key,
                 amount: row.amount,
                 l2_tx_id: row.l2_tx_id.map_or(String::new(), |id| id.to_string()),
                 commitment_hash: row.commitment_hash,
@@ -183,11 +185,11 @@ impl EthereumRelayer {
             })
             .collect();
 
-        Ok(deposits_with_proofs)
+        Ok(withdrawals_with_proofs)
     }
 
-    /// Update the status of a deposit
-    async fn update_deposit_status(
+    /// Update the status of a withdrawal
+    async fn update_withdrawal_status(
         &self,
         conn: &mut PgConnection,
         id: i32,
@@ -195,7 +197,7 @@ impl EthereumRelayer {
     ) -> Result<(), RelayerError> {
         sqlx::query!(
             r#"
-            UPDATE deposits 
+            UPDATE withdrawals 
             SET status = $2, updated_at = NOW()
             WHERE id = $1
             "#,
@@ -208,7 +210,7 @@ impl EthereumRelayer {
         Ok(())
     }
 
-    /// Increment the retry count for a deposit
+    /// Increment the retry count for a withdrawal
     async fn increment_retry_count(
         &self,
         conn: &mut PgConnection,
@@ -216,7 +218,7 @@ impl EthereumRelayer {
     ) -> Result<(), RelayerError> {
         sqlx::query!(
             r#"
-            UPDATE deposits 
+            UPDATE withdrawals 
             SET retry_count = retry_count + 1, updated_at = NOW()
             WHERE id = $1
             "#,
@@ -229,28 +231,31 @@ impl EthereumRelayer {
     }
 
     /// Relay a transaction to Ethereum
-    async fn relay_transaction(&self, deposit: &DepositWithProof) -> Result<(), RelayerError> {
+    async fn relay_transaction(
+        &self,
+        withdrawal: &WithdrawalWithProof,
+    ) -> Result<(), RelayerError> {
         // Try to send the transaction with retry logic
         let mut retry_count = 0;
         while retry_count < self.config.max_retries {
             trace!(
-                "Attempting to relay transaction for deposit {}, attempt {}/{}",
-                deposit.deposit_id,
+                "Attempting to relay transaction for withdrawal {}, attempt {}/{}",
+                withdrawal.withdrawal_id,
                 retry_count + 1,
                 self.config.max_retries
             );
 
-            match self.send_unlock_funds_transaction(deposit).await {
+            match self.send_unlock_funds_transaction(withdrawal).await {
                 Ok(_) => {
                     info!(
-                        "Transaction for deposit {} successfully sent",
-                        deposit.deposit_id
+                        "Transaction for withdrawal {} successfully sent",
+                        withdrawal.withdrawal_id
                     );
                     return Ok(());
                 }
                 Err(e) => {
-                    warn!("Failed to send transaction for deposit {}: {:?}. Retrying in {} seconds...", 
-                          deposit.deposit_id, e, self.config.retry_delay_seconds);
+                    warn!("Failed to send transaction for withdrawal {}: {:?}. Retrying in {} seconds...", 
+                          withdrawal.withdrawal_id, e, self.config.retry_delay_seconds);
 
                     retry_count += 1;
                     if retry_count < self.config.max_retries {
@@ -269,7 +274,7 @@ impl EthereumRelayer {
     /// Send an Ethereum transaction to the unlock_funds_with_proof function
     async fn send_unlock_funds_transaction(
         &self,
-        deposit: &DepositWithProof,
+        withdrawal: &WithdrawalWithProof,
     ) -> Result<(), RelayerError> {
         let accounts: Vec<Address> = self
             .client
@@ -295,28 +300,28 @@ impl EthereumRelayer {
             .await
             .map_err(|e| RelayerError::RpcError(e.to_string()))?;
 
-        // Parse user address
-        let user_address = deposit
-            .user_address
-            .parse::<Address>()
-            .map_err(|e| RelayerError::ContractError(format!("Invalid user address: {}", e)))?;
+        // Parse user pub key
+        let stark_pub_key = withdrawal
+            .stark_pub_key
+            .parse::<U256>()
+            .map_err(|e| RelayerError::ContractError(format!("Invalid stark pub key: {}", e)))?;
 
         // Parse amount
-        let amount = U256::from(deposit.amount);
+        let amount = U256::from(withdrawal.amount);
 
         // Parse L2 TX ID, defaulting to 0 if empty
-        let l2_tx_id = if deposit.l2_tx_id.is_empty() {
+        let l2_tx_id = if withdrawal.l2_tx_id.is_empty() {
             U256::ZERO
         } else {
-            U256::from_str_radix(&deposit.l2_tx_id, 10)
+            U256::from_str_radix(&withdrawal.l2_tx_id, 10)
                 .map_err(|e| RelayerError::ContractError(format!("Invalid L2 TX ID: {}", e)))?
         };
 
         // Parse commitment hash to bytes32
-        let commitment_hash_str = deposit
+        let commitment_hash_str = withdrawal
             .commitment_hash
             .strip_prefix("0x")
-            .unwrap_or(&deposit.commitment_hash);
+            .unwrap_or(&withdrawal.commitment_hash);
         let commitment_hash = hex::decode(commitment_hash_str)
             .map_err(|e| RelayerError::ContractError(format!("Invalid commitment hash: {}", e)))?;
 
@@ -326,14 +331,14 @@ impl EthereumRelayer {
         commitment_bytes32[..len].copy_from_slice(&commitment_hash[..len]);
 
         // Convert proof_params and proof_data from bytes to Vec<U256>
-        let proof_params = self.decode_uint_array_from_bytes(&deposit.proof_params)?;
-        let proof = self.decode_uint_array_from_bytes(&deposit.proof_data)?;
+        let proof_params = self.decode_uint_array_from_bytes(&withdrawal.proof_params)?;
+        let proof = self.decode_uint_array_from_bytes(&withdrawal.proof_data)?;
 
         // Create the function call using alloy_sol_types
         let call = unlock_funds_with_proofCall {
             proofParams: proof_params,
             proof,
-            user: user_address,
+            stark_pub_key,
             amount,
             l2TxId: l2_tx_id,
             commitmentHash: alloy_primitives::FixedBytes(commitment_bytes32),

@@ -1,15 +1,16 @@
-use zeroxbridge_sequencer::events::l2_event_watcher::TestProvider;
-use zeroxbridge_sequencer::events::fetch_l2_burn_events;
-use zeroxbridge_sequencer::config::{
-    AppConfig, ContractConfig, Contracts, DatabaseConfig, EthereumConfig, LoggingConfig,
-    MerkleConfig, OracleConfig, ProverConfig, QueueConfig, RelayerConfig, ServerConfig, StarknetConfig,
-};
 use anyhow::Result;
 use mockall::predicate::*;
 use mockall::*;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
-use starknet::core::types::{EventFilter, EventsPage, Felt, EmittedEvent};
+use starknet::core::types::{EmittedEvent, EventFilter, EventsPage, Felt};
+use zeroxbridge_sequencer::config::{
+    AppConfig, ContractConfig, Contracts, DatabaseConfig, EthereumConfig, LoggingConfig,
+    MerkleConfig, OracleConfig, ProverConfig, QueueConfig, RelayerConfig, ServerConfig,
+    StarknetConfig,
+};
+use zeroxbridge_sequencer::events::fetch_l2_burn_events;
+use zeroxbridge_sequencer::events::l2_event_watcher::TestProvider;
 
 // Mock the Starknet Provider
 mock! {
@@ -45,14 +46,15 @@ impl TestProvider for MockStarknetProvider {
 // Test module to group all L2 event watcher tests
 #[cfg(test)]
 mod tests {
+    use zeroxbridge_sequencer::config::HerodotusConfig;
+
     use super::*;
 
     // Helper function to create test database pool
     async fn setup_test_db() -> PgPool {
-        let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-            "postgres://postgres:postgres@localhost:5435/zeroxdb".to_string()
-        });
-        
+        let database_url = std::env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5435/zeroxdb".to_string());
+
         PgPoolOptions::new()
             .max_connections(1)
             .connect(&database_url)
@@ -113,6 +115,10 @@ mod tests {
                 tolerance_percent: Some(0.01), // 1% tolerance
                 polling_interval_seconds: 60,
             },
+            herodotus: HerodotusConfig {
+                api_key: "123534".to_string(),
+                herodotus_endpoint: "23478234".to_string(),
+            },
         }
     }
 
@@ -127,7 +133,10 @@ mod tests {
     ) -> EmittedEvent {
         EmittedEvent {
             from_address: Felt::from_hex("0x456").unwrap(),
-            keys: vec![Felt::from_hex("0x0099de3f38fed0a76764f614c6bc2b958814813685abc1af6deedab612df44f3").unwrap()],
+            keys: vec![Felt::from_hex(
+                "0x0099de3f38fed0a76764f614c6bc2b958814813685abc1af6deedab612df44f3",
+            )
+            .unwrap()],
             data: vec![
                 Felt::from_hex(user).unwrap(),
                 Felt::from_hex(amount_low).unwrap(),
@@ -145,30 +154,16 @@ mod tests {
         let pool = setup_test_db().await;
         let config = create_test_config();
         let mut mock_provider = MockStarknetProvider::new();
-        
+
         // Mock block number response
         mock_provider.expect_block_number().returning(|| Ok(100));
-        
+
         // Create test events
         let test_events = vec![
-            create_test_event(
-                95,
-                "0x123",
-                "0x1234567890abcdef",
-                "0x1000",
-                "0x0",
-                "0xabc",
-            ),
-            create_test_event(
-                96,
-                "0x456",
-                "0xfedcba0987654321",
-                "0x2000",
-                "0x0",
-                "0xdef",
-            ),
+            create_test_event(95, "0x123", "0x1234567890abcdef", "0x1000", "0x0", "0xabc"),
+            create_test_event(96, "0x456", "0xfedcba0987654321", "0x2000", "0x0", "0xdef"),
         ];
-        
+
         // Mock get_events response
         mock_provider.expect_get_events().returning(move |_, _, _| {
             Ok(EventsPage {
@@ -176,9 +171,9 @@ mod tests {
                 continuation_token: None,
             })
         });
-        
+
         let result = fetch_l2_burn_events(&config, &pool, 90, &mock_provider).await?;
-        
+
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].commitment_hash, "0xabc");
         assert_eq!(result[0].block_number, 95);
@@ -186,7 +181,7 @@ mod tests {
         assert_eq!(result[1].commitment_hash, "0xdef");
         assert_eq!(result[1].block_number, 96);
         assert_eq!(result[1].transaction_hash, "0x456");
-        
+
         Ok(())
     }
 
@@ -195,9 +190,9 @@ mod tests {
         let pool = setup_test_db().await;
         let config = create_test_config();
         let mut mock_provider = MockStarknetProvider::new();
-        
+
         mock_provider.expect_block_number().returning(|| Ok(100));
-        
+
         let test_events = vec![create_test_event(
             95,
             "0x123",
@@ -206,7 +201,7 @@ mod tests {
             "0x0",
             "0xabc",
         )];
-        
+
         mock_provider
             .expect_get_events()
             .times(1)
@@ -216,11 +211,11 @@ mod tests {
                     continuation_token: None,
                 })
             });
-        
+
         // First call: should process blocks 90-95
         let result = fetch_l2_burn_events(&config, &pool, 90, &mock_provider).await?;
         assert_eq!(result.len(), 1);
-        
+
         // Verify block tracker was updated
         let last_block = sqlx::query!(
             "SELECT last_block FROM block_trackers WHERE key = 'l2_burn_events_last_block'"
@@ -230,7 +225,7 @@ mod tests {
 
         assert_eq!(result[0].block_number, 95);
         assert_eq!(last_block.last_block, 95);
-        
+
         Ok(())
     }
 
@@ -239,9 +234,9 @@ mod tests {
         let pool = setup_test_db().await;
         let config = create_test_config();
         let mut mock_provider = MockStarknetProvider::new();
-        
+
         mock_provider.expect_block_number().returning(|| Ok(100));
-        
+
         let test_events = vec![create_test_event(
             95,
             "0x123",
@@ -250,23 +245,23 @@ mod tests {
             "0x1",
             "0xabc",
         )];
-        
+
         mock_provider.expect_get_events().returning(move |_, _, _| {
             Ok(EventsPage {
                 events: test_events.clone(),
                 continuation_token: None,
             })
         });
-        
+
         let result = fetch_l2_burn_events(&config, &pool, 92, &mock_provider).await?;
-        
+
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].commitment_hash, "0xabc");
         assert_eq!(result[0].block_number, 95);
         assert_eq!(result[0].transaction_hash, "0x123");
         assert_eq!(result[0].amount_low, "0xffffffffffffffff");
         assert_eq!(result[0].amount_high, "0x1");
-        
+
         Ok(())
     }
 }

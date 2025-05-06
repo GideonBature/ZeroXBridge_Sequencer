@@ -1,8 +1,7 @@
 -- Add migration script here
 -- Create withdrawals table
 
-DROP TABLE IF EXISTS withdrawals;
-CREATE TABLE withdrawals (
+CREATE TABLE IF NOT EXISTS withdrawals (
     id SERIAL PRIMARY KEY,
     stark_pub_key TEXT NOT NULL,
     amount BIGINT NOT NULL,
@@ -10,45 +9,33 @@ CREATE TABLE withdrawals (
     commitment_hash TEXT NOT NULL,
     status TEXT NOT NULL,
     retry_count INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Create deposits table
-DROP TABLE IF EXISTS deposits;
-CREATE TABLE deposits (
+CREATE TABLE IF NOT EXISTS deposits (
     id SERIAL PRIMARY KEY,
-    user_address TEXT NOT NULL,
+    stark_pub_key TEXT NOT NULL,
     amount BIGINT NOT NULL,
     commitment_hash TEXT NOT NULL,
     status TEXT NOT NULL,
     retry_count INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Create L2 transactions table
 CREATE TABLE IF NOT EXISTS l2_transactions (
     id BIGSERIAL PRIMARY KEY,
-    user_address VARCHAR(42) NOT NULL,
-    amount NUMERIC(78, 0) NOT NULL,
+    stark_pub_key VARCHAR(42) NOT NULL,
+    amount BIGINT NOT NULL,
     token_address VARCHAR(42) NOT NULL,
     status VARCHAR NOT NULL DEFAULT 'pending',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    retry_count INT NOT NULL DEFAULT 0,
     tx_hash VARCHAR(66),
-    error TEXT,
-    proof_data TEXT
-);
-
-    id BIGSERIAL PRIMARY KEY,
-    user_address VARCHAR NOT NULL,
-    amount VARCHAR NOT NULL,
-    token_address VARCHAR NOT NULL,
-    status VARCHAR NOT NULL DEFAULT 'pending',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    tx_hash VARCHAR,
     error TEXT,
     proof_data TEXT
 );

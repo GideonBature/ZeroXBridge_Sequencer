@@ -12,13 +12,14 @@ If you **do not have Postgres installed locally**, you can quickly run it via Do
 ```bash
 docker run -d --rm \
   --name zerox \
-  -p 5435:5432 \
+  -p 5434:5432 \
   -e POSTGRES_PASSWORD=postgres \
   -e POSTGRES_DB=zeroxdb \
   postgres
 ```
 
 > ✅ This will start a Postgres container listening on `localhost:5435`, with:
+>
 > - Username: `postgres`
 > - Password: `postgres`
 > - Database: `zeroxdb`
@@ -32,7 +33,7 @@ If you already have Postgres installed, just make sure it is running and you hav
 Create a `.env` file at the project root if it doesn't exist, and add:
 
 ```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5435/zeroxdb
+DATABASE_URL=postgresql://postgres:postgres@localhost:5434/zeroxdb
 ```
 
 This will allow the application and tooling (`sqlx`) to connect to your local database.
@@ -75,6 +76,7 @@ sqlx migrate info
 ---
 
 ## Notes
+
 - The Postgres container started with Docker will automatically be removed (`--rm`) when stopped.
 - If you need to stop the container manually:
 

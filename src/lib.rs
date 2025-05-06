@@ -12,6 +12,7 @@ pub mod queue {
 
 pub mod relayer {
     pub mod ethereum_relayer;
+    pub mod starknet_relayer;
 }
 
 pub mod events;

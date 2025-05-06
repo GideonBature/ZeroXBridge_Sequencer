@@ -23,5 +23,3 @@ pub fn create_router(pool: Arc<PgPool>) -> Router {
         )
         .layer(Extension(pool))
 }
-
-

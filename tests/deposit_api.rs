@@ -18,7 +18,7 @@ async fn test_post_valid_deposit() {
         .header("content-type", "application/json")
         .body(Body::from(
             json!({
-                "user_address": "0xuser123",
+                "stark_pub_key": "0xuser123",
                 "amount": 1000
             })
             .to_string(),
@@ -45,7 +45,7 @@ async fn test_post_invalid_deposit() {
         .header("content-type", "application/json")
         .body(Body::from(
             json!({
-                "user_address": "",
+                "stark_pub_key": "",
                 "amount": -100
             })
             .to_string(),
@@ -67,7 +67,7 @@ async fn test_get_pending_deposits() {
         .header("content-type", "application/json")
         .body(Body::from(
             json!({
-                "user_address": "0xtest123",
+                "stark_pub_key": "0xtest123",
                 "amount": 500
             })
             .to_string(),
