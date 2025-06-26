@@ -6,8 +6,7 @@ use sqlx::PgPool;
 use starknet::core::types::{EmittedEvent, EventFilter, EventsPage, Felt};
 use zeroxbridge_sequencer::config::{
     AppConfig, ContractConfig, Contracts, DatabaseConfig, EthereumConfig, LoggingConfig,
-    MerkleConfig, OracleConfig, ProverConfig, QueueConfig, RelayerConfig, ServerConfig,
-    StarknetConfig,
+    MerkleConfig, OracleConfig, QueueConfig, RelayerConfig, ServerConfig, StarknetConfig,
 };
 use zeroxbridge_sequencer::events::fetch_l2_burn_events;
 use zeroxbridge_sequencer::events::l2_event_watcher::TestProvider;
@@ -76,20 +75,14 @@ mod tests {
                 host: "127.0.0.1".to_string(),
                 server_url: "http://localhost:8080".to_string(),
             },
-            database: DatabaseConfig {
-                url: String::new(),
-                max_connections: 5,
-            },
+            database: DatabaseConfig { max_connections: 5 },
             ethereum: EthereumConfig {
-                rpc_url: String::new(),
                 chain_id: 11155111, // Sepolia testnet
                 confirmations: 1,
             },
             starknet: StarknetConfig {
-                rpc_url: "https://starknet-mainnet.public.blastapi.io".to_string(),
                 chain_id: "SN_SEPOLIA".to_string(),
             },
-            prover: ProverConfig {},
             relayer: RelayerConfig {
                 max_retries: 3,
                 retry_delay_seconds: 60,
@@ -116,7 +109,6 @@ mod tests {
                 polling_interval_seconds: 60,
             },
             herodotus: HerodotusConfig {
-                api_key: "123534".to_string(),
                 herodotus_endpoint: "23478234".to_string(),
             },
         }
@@ -218,7 +210,7 @@ mod tests {
 
         // Verify block tracker was updated
         let last_block = sqlx::query!(
-            "SELECT last_block FROM block_trackers WHERE key = 'l2_burn_events_last_block'"
+            "SELECT last_block FROM l2_block_trackers WHERE key = 'l2_burn_events_last_block'"
         )
         .fetch_one(&pool)
         .await?;

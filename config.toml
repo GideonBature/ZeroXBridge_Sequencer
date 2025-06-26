@@ -14,16 +14,13 @@ host = "http://localhost:4000"
 server_url = "http://127.0.0.1:4000"
 
 [database]
-url = "postgres://username:password@localhost/zeroXBridgeDB"
 max_connections = 10
 
 [ethereum]
-rpc_url = "https://mainnet.infura.io/v3/YOUR_INFURA_KEY"
 chain_id = 1
 confirmations = 3
 
 [starknet]
-rpc_url = "https://starknet-mainnet.infura.io/v3/YOUR_INFURA_KEY"
 chain_id = "0x534e5f4d41494e"  # SN_MAIN
 
 [prover]

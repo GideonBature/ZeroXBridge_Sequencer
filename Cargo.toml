@@ -54,6 +54,7 @@ alloy-sol-types = "1.0.0"
 hex = "0.4"
 rand = "0.8"
 config = "0.15.11"
+alloy = "0.14.0"
 
 # Testing & mocking
 mockall = "0.13.1"
