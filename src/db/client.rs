@@ -16,7 +16,7 @@ impl DBClient {
     pub async fn new(config: &AppConfig) -> Result<Self> {
         let pool = PgPoolOptions::new()
             .max_connections(config.database.max_connections)
-            .connect(&config.database.url)
+            .connect(&config.database.get_db_url())
             .await?;
 
         Ok(Self {

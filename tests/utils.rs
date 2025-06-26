@@ -1,12 +1,18 @@
 use axum::{routing::post, Extension, Router};
 use sqlx::postgres::PgPoolOptions;
-use std::{env, sync::Arc};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use zeroxbridge_sequencer::api::{
     handlers::{handle_deposit_post, handle_get_pending_deposits},
     routes::AppState,
 };
+use zeroxbridge_sequencer::config;
 
 pub async fn create_test_app() -> Router {
+    let configuration = config::load_config(Some(&Path::new("config_file_path")));
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
 
     let pool = PgPoolOptions::new()
