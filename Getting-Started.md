@@ -18,7 +18,7 @@ docker run -d --rm \
   postgres
 ```
 
-> ✅ This will start a Postgres container listening on `localhost:5435`, with:
+> ✅ This will start a Postgres container listening on `localhost:5434`, with:
 >
 > - Username: `postgres`
 > - Password: `postgres`
