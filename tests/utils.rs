@@ -1,19 +1,11 @@
-use axum::{routing::post, Extension, Router};
 use sqlx::postgres::PgPoolOptions;
-use std::{
-    env,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-use zeroxbridge_sequencer::api::{
-    handlers::{handle_deposit_post, handle_get_pending_deposits},
-    routes::AppState,
-};
+use std::{path::Path, sync::Arc};
+use zeroxbridge_sequencer::api::routes::AppState;
 use zeroxbridge_sequencer::config;
 
-pub async fn create_test_app() -> Router {
-    let configuration = config::load_config(Some(&Path::new("config_file_path")));
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+pub async fn create_test_app() -> Arc<AppState> {
+    let configuration = config::load_config(Some(&Path::new("./config-tests.toml"))).unwrap();
+    let database_url = configuration.database.get_db_url();
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -21,12 +13,10 @@ pub async fn create_test_app() -> Router {
         .await
         .expect("Failed to connect to test database");
 
-    let state = Arc::new(AppState { db: pool.clone() });
+    let state = Arc::new(AppState {
+        db: pool.clone(),
+        config: configuration.clone(),
+    });
 
-    Router::new()
-        .route(
-            "/deposit",
-            post(handle_deposit_post).get(handle_get_pending_deposits),
-        )
-        .layer(Extension(state))
+    state
 }

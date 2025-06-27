@@ -1,6 +1,9 @@
-use axum::{routing::post, Extension, Router};
+use crate::{api::handlers::hello_world, config::AppConfig};
+use axum::{
+    routing::{get, post},
+    Extension, Router,
+};
 use sqlx::PgPool;
-use std::sync::Arc;
 
 use crate::api::handlers::{
     create_withdrawal, get_pending_withdrawals, handle_deposit_post, handle_get_pending_deposits,
@@ -9,10 +12,12 @@ use crate::api::handlers::{
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
+    pub config: AppConfig,
 }
 
-pub fn create_router(pool: Arc<PgPool>) -> Router {
+pub fn create_router(pool: PgPool) -> Router {
     Router::new()
+        .route("/", get(hello_world))
         .route(
             "/deposit",
             post(handle_deposit_post).get(handle_get_pending_deposits),
