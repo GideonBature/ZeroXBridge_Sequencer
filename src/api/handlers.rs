@@ -1,12 +1,14 @@
 use axum::{http::StatusCode, Extension, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use starknet::core::types::Felt;
 use sqlx::PgPool;
 
 use crate::db::database::{
     fetch_pending_deposits, fetch_pending_withdrawals, insert_deposit, insert_withdrawal, Deposit,
     Withdrawal,
 };
+use crate::utils::hash::compute_poseidon_commitment_hash;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateWithdrawalRequest {
@@ -30,6 +32,23 @@ pub struct DepositResponse {
 #[derive(Serialize, Deserialize)]
 pub struct WithrawalResponse {
     pub withdrawal_id: i32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PoseidonHashRequest {
+    /// Starknet address of the recipient
+    pub recipient: String,
+    /// USD amount to mint
+    pub amount: u128,
+    /// Transaction nonce
+    pub nonce: u64,
+    /// Block timestamp
+    pub timestamp: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PoseidonHashResponse {
+    pub commitment_hash: String,
 }
 
 pub async fn handle_deposit_post(
@@ -85,14 +104,42 @@ pub async fn create_withdrawal(
 pub async fn get_pending_withdrawals(
     Extension(pool): Extension<PgPool>,
 ) -> Result<Json<Vec<Withdrawal>>, (StatusCode, String)> {
-    let withdrawals = fetch_pending_withdrawals(&pool, 5).await.map_err(|err| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("DB Error: {:?}", err),
-        )
-    })?;
+    match fetch_pending_withdrawals(&pool, 3).await {
+        Ok(withdrawals) => Ok(Json(withdrawals)),
+        Err(err) => Err((StatusCode::INTERNAL_SERVER_ERROR, err.to_string())),
+    }
+}
 
-    Ok(Json(withdrawals))
+/// Computes a Poseidon commitment hash for deposit transactions
+/// 
+/// This endpoint allows users to generate the same hash that the L2 contract
+/// will compute and verify using Cairo-native Poseidon logic. Users should call
+/// this endpoint before depositing to L1.
+/// 
+/// Returns the commitment hash that should be used when making the deposit.
+pub async fn compute_poseidon_hash(
+    Json(payload): Json<PoseidonHashRequest>,
+) -> Result<Json<PoseidonHashResponse>, (StatusCode, String)> {
+    // Parse recipient address as Felt (felt252)
+    let recipient_felt = match Felt::from_hex(&payload.recipient) {
+        Ok(felt) => felt,
+        Err(_) => return Err((StatusCode::BAD_REQUEST, "Invalid recipient address format. Must be a valid hex string.".to_string())),
+    };
+
+    // Compute the Poseidon hash using the utility function
+    let hash = compute_poseidon_commitment_hash(
+        recipient_felt,
+        payload.amount,
+        payload.nonce,
+        payload.timestamp,
+    );
+
+    // Convert hash to hex string format
+    let hash_hex = format!("0x{:x}", hash);
+    
+    Ok(Json(PoseidonHashResponse {
+        commitment_hash: hash_hex,
+    }))
 }
 
 pub async fn hello_world(
