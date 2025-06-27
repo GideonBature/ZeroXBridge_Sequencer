@@ -1,5 +1,6 @@
 use axum::{http::StatusCode, Extension, Json};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sqlx::PgPool;
 
 use crate::db::database::{
@@ -14,7 +15,7 @@ pub struct CreateWithdrawalRequest {
     pub commitment_hash: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DepositRequest {
     pub stark_pub_key: String,
     pub amount: i64,
@@ -92,4 +93,12 @@ pub async fn get_pending_withdrawals(
     })?;
 
     Ok(Json(withdrawals))
+}
+
+pub async fn hello_world(
+    Extension(_): Extension<PgPool>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    Ok(Json(json!({
+        "message": "hello world from zeroxbridge"
+    })))
 }
