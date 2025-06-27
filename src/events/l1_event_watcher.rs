@@ -35,7 +35,7 @@ pub async fn fetch_l1_deposit_events(
     from_block: u64,
     contract_addr: &str,
 ) -> Result<Vec<Log<ZeroXBridge::DepositEvent>>, Box<dyn std::error::Error>> {
-    let mut conn: sqlx::pool::PoolConnection<sqlx::Postgres> = db_pool.acquire().await?;
+    let mut conn = db_pool.acquire().await?;
 
     // Load last processed block if available
     let from_block = match get_last_processed_block(&mut conn, BLOCK_TRACKER_KEY).await {
