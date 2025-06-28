@@ -1,13 +1,13 @@
-use axum::{http::StatusCode, Extension, Json};
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use starknet::core::types::Felt;
-use sqlx::PgPool;
 use crate::db::database::{
     fetch_pending_deposits, fetch_pending_withdrawals, insert_deposit, insert_withdrawal, Deposit,
     Withdrawal,
 };
 use crate::utils::hash::compute_poseidon_commitment_hash;
+use axum::{http::StatusCode, Extension, Json};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use sqlx::PgPool;
+use starknet::core::types::Felt;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateWithdrawalRequest {
@@ -156,12 +156,4 @@ pub async fn compute_poseidon_hash(
     Ok(Json(PoseidonHashResponse {
         commitment_hash: hash_hex,
     }))
-}
-
-pub async fn hello_world(
-    Extension(_): Extension<PgPool>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    Ok(Json(json!({
-        "message": "hello world from zeroxbridge"
-    })))
 }
