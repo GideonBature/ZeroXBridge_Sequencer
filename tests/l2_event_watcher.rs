@@ -210,7 +210,7 @@ mod tests {
 
         // Verify block tracker was updated
         let last_block = sqlx::query!(
-            "SELECT last_block FROM l2_block_trackers WHERE key = 'l2_burn_events_last_block'"
+            "SELECT last_block FROM block_trackers WHERE key = 'l2_burn_events_last_block'"
         )
         .fetch_one(&pool)
         .await?;
