@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use starknet::core::types::Felt;
 use sqlx::PgPool;
-
 use crate::db::database::{
     fetch_pending_deposits, fetch_pending_withdrawals, insert_deposit, insert_withdrawal, Deposit,
     Withdrawal,
@@ -111,11 +110,17 @@ pub async fn get_pending_withdrawals(
 }
 
 /// Computes a Poseidon commitment hash for deposit transactions
-/// 
+///
 /// This endpoint allows users to generate the same hash that the L2 contract
 /// will compute and verify using Cairo-native Poseidon logic. Users should call
 /// this endpoint before depositing to L1.
-/// 
+///
+/// The hash is computed using the following fields:
+/// - recipient: Starknet address of the receiver
+/// - amount: USD amount to mint
+/// - nonce: Transaction nonce
+/// - timestamp: Block timestamp
+///
 /// Returns the commitment hash that should be used when making the deposit.
 pub async fn compute_poseidon_hash(
     Json(payload): Json<PoseidonHashRequest>,
@@ -123,7 +128,10 @@ pub async fn compute_poseidon_hash(
     // Parse recipient address as Felt (felt252)
     let recipient_felt = match Felt::from_hex(&payload.recipient) {
         Ok(felt) => felt,
-        Err(_) => return Err((StatusCode::BAD_REQUEST, "Invalid recipient address format. Must be a valid hex string.".to_string())),
+        Err(_) => return Err((StatusCode::BAD_REQUEST,
+            "Invalid recipient address format. Must be a valid Starknet address in hex format (0x...).".
+            to_string())
+        ),
     };
 
     // Compute the Poseidon hash using the utility function
@@ -136,7 +144,7 @@ pub async fn compute_poseidon_hash(
 
     // Convert hash to hex string format
     let hash_hex = format!("0x{:x}", hash);
-    
+
     Ok(Json(PoseidonHashResponse {
         commitment_hash: hash_hex,
     }))
