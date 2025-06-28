@@ -1,12 +1,13 @@
+use axum::{http::StatusCode, response::IntoResponse, Extension, Json};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use sqlx::PgPool;
+
 use crate::db::database::{
     fetch_pending_deposits, fetch_pending_withdrawals, insert_deposit, insert_withdrawal, Deposit,
     Withdrawal,
 };
-use crate::utils::hash::{compute_poseidon_commitment_hash, HashMethod};
-use axum::{http::StatusCode, Extension, Json};
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use sqlx::PgPool;
+use crate::utils::{BurnData, HashMethod, compute_poseidon_commitment_hash};
 use starknet::core::types::Felt;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -51,6 +52,34 @@ pub struct PoseidonHashRequest {
 #[derive(Serialize, Deserialize)]
 pub struct PoseidonHashResponse {
     pub commitment_hash: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct HashRequest {
+    pub stark_pubkey: String,
+    pub usd_val: u64,
+    pub nonce: u64,
+    pub timestamp: u64,
+}
+
+#[derive(Serialize, Debug)]
+pub struct HashResponse {
+    pub commitment_hash: String,
+    pub input_data: InputData,
+}
+
+#[derive(Serialize, Debug)]
+pub struct InputData {
+    pub stark_pubkey: String,
+    pub usd_val: u64,
+    pub nonce: u64,
+    pub timestamp: u64,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ErrorResponse {
+    pub error: String,
+    pub details: Option<String>,
 }
 
 pub async fn handle_deposit_post(
@@ -175,4 +204,36 @@ pub async fn compute_poseidon_hash(
     Ok(Json(PoseidonHashResponse {
         commitment_hash: hash_hex,
     }))
+}
+
+pub async fn compute_hash_handler(
+    Json(payload): Json<HashRequest>,
+) -> Result<Json<HashResponse>, impl IntoResponse> {
+    // Validate the Starknet public key format before hashing
+    let burn_data = BurnData {
+        caller: payload.stark_pubkey.clone(),
+        amount: payload.usd_val,
+        nonce: payload.nonce,
+        time_stamp: payload.timestamp,
+    };
+    if BurnData::hex_to_bytes32(&burn_data.caller).is_err() {
+        let error_response = ErrorResponse {
+            error: "Invalid stark_pubkey".to_string(),
+            details: Some("Invalid hex string for caller address".to_string()),
+        };
+        return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+    }
+    // Compute the commitment hash
+    let hex_hash = burn_data.hash_to_hex_string();
+    // Create response
+    let response = HashResponse {
+        commitment_hash: hex_hash,
+        input_data: InputData {
+            stark_pubkey: burn_data.caller,
+            usd_val: burn_data.amount,
+            nonce: burn_data.nonce,
+            timestamp: burn_data.time_stamp,
+        },
+    };
+    Ok(Json(response))
 }
