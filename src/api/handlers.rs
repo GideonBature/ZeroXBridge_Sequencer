@@ -2,7 +2,7 @@ use crate::db::database::{
     fetch_pending_deposits, fetch_pending_withdrawals, insert_deposit, insert_withdrawal, Deposit,
     Withdrawal,
 };
-use crate::utils::hash::compute_poseidon_commitment_hash;
+use crate::utils::hash::{compute_poseidon_commitment_hash, HashMethod};
 use axum::{http::StatusCode, Extension, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -43,6 +43,9 @@ pub struct PoseidonHashRequest {
     pub nonce: u64,
     /// Block timestamp
     pub timestamp: u64,
+    /// Optional hash method to use: "batch" or "sequential" (default: "sequential")
+    #[serde(default)]
+    pub hash_method: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -142,12 +145,28 @@ pub async fn compute_poseidon_hash(
         ),
     };
 
+    // Determine which hash method to use (default to sequential pairwise which is more common in Cairo contracts)
+    let method = match payload.hash_method.as_deref() {
+        Some("batch") => HashMethod::BatchHash,
+        Some("sequential") | None => HashMethod::SequentialPairwise,
+        Some(method) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "Invalid hash method: '{}'. Valid options are 'batch' or 'sequential'",
+                    method
+                ),
+            ))
+        }
+    };
+
     // Compute the Poseidon hash using the utility function
     let hash = compute_poseidon_commitment_hash(
         recipient_felt,
         payload.amount,
         payload.nonce,
         payload.timestamp,
+        method,
     );
 
     // Convert hash to hex string format
