@@ -13,10 +13,6 @@ use alloy::{
     sol_types::SolEvent,
 };
 
-const MAX_RETRIES: u32 = 3;
-const RETRY_DELAY_MS: u64 = 1000;
-const DEFAULT_PAGE_SIZE: u64 = 100;
-
 // Name of the table for storing block tracker
 const BLOCK_TRACKER_KEY: &str = "l1_deposit_events_last_block";
 const DEPOSIT_HASH_BLOCK_TRACKER_KEY: &str = "l1_deposit_hash_events_last_block";
@@ -47,8 +43,6 @@ pub async fn fetch_l1_deposit_events(
     from_block: u64,
     contract_addr: &str,
 ) -> Result<Vec<Log<ZeroXBridge::DepositEvent>>, Box<dyn std::error::Error>> {
-    //    let mut conn = db_pool.acquire().await?;
-
     // Load last processed block for DepositEvent
     let from_block_deposit = match get_last_processed_block(db_pool, BLOCK_TRACKER_KEY).await {
         Ok(Some(last_block)) => last_block + 1,
