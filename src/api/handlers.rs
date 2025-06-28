@@ -109,6 +109,14 @@ pub async fn get_pending_withdrawals(
     }
 }
 
+pub async fn hello_world(
+    Extension(_): Extension<PgPool>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    Ok(Json(json!({
+        "message": "hello world from zeroxbridge"
+    })))
+}
+
 /// Computes a Poseidon commitment hash for deposit transactions
 ///
 /// This endpoint allows users to generate the same hash that the L2 contract
