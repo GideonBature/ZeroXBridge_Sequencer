@@ -13,10 +13,6 @@ use alloy::{
     sol_types::SolEvent,
 };
 
-const MAX_RETRIES: u32 = 3;
-const RETRY_DELAY_MS: u64 = 1000;
-const DEFAULT_PAGE_SIZE: u64 = 100;
-
 // Name of the table for storing block tracker
 const BLOCK_TRACKER_KEY: &str = "l1_deposit_events_last_block";
 
@@ -42,7 +38,7 @@ pub async fn fetch_l1_deposit_events(
     let mut conn = db_pool.acquire().await?;
 
     // Load last processed block if available
-    let from_block = match get_last_processed_block(&mut db_pool, BLOCK_TRACKER_KEY).await {
+    let from_block = match get_last_processed_block(&mut conn, BLOCK_TRACKER_KEY).await {
         Ok(Some(last_block)) => last_block + 1,
         Ok(None) => from_block,
         Err(e) => {
