@@ -17,7 +17,8 @@ const BLOCK_TRACKER_KEY: &str = "l2_burn_events_last_block";
 // Event key for BurnEvent (calculated from event name "BurnEvent")
 const BURN_EVENT_KEY: &str = "0x0099de3f38fed0a76764f614c6bc2b958814813685abc1af6deedab612df44f3";
 // Event key for WithdrawalHashAppended
-const WITHDRAWAL_HASH_APPENDED_EVENT_KEY: &str = "0x01e3ad31c1ae0cf5ec9a8eaf3c540d6cf961c8f4e3bfe1d55a5b92a09e1c9c1e";
+const WITHDRAWAL_HASH_APPENDED_EVENT_KEY: &str =
+    "0x01e3ad31c1ae0cf5ec9a8eaf3c540d6cf961c8f4e3bfe1d55a5b92a09e1c9c1e";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommitmentLog {
@@ -83,10 +84,7 @@ pub async fn fetch_l2_events<P: TestProvider>(
         from_block: Some(BlockId::Number(start_block)),
         to_block: Some(BlockId::Number(latest_block)),
         address: Some(contract_address),
-        keys: Some(vec![
-            vec![burn_event_key],
-            vec![withdrawal_event_key],
-        ]),
+        keys: Some(vec![vec![burn_event_key, withdrawal_event_key]]),
     };
 
     let mut burn_events = Vec::new();
@@ -94,20 +92,21 @@ pub async fn fetch_l2_events<P: TestProvider>(
     let mut continuation_token = None;
 
     loop {
-        let page = fetch_events_with_retry(provider, &event_filter, continuation_token.clone(), DEFAULT_PAGE_SIZE).await?;
+        let page = fetch_events_with_retry(
+            provider,
+            &event_filter,
+            continuation_token.clone(),
+            DEFAULT_PAGE_SIZE,
+        )
+        .await?;
 
         for event in &page.events {
             let block_number = event.block_number.unwrap_or_else(|| {
-                warn!("Missing block number for event {:?}", event);
+                warn!("Missing block number for event: {:?}", event);
                 0
             });
 
             if event.keys.contains(&burn_event_key) && event.data.len() >= 4 {
-                if burn_events.is_empty() && withdrawal_events.is_empty() {
-                    info!("No L2 events found from {} to {}", start_block, latest_block);
-                    return Ok(L2EventResults { burn_events, withdrawal_events });
-                }
-
                 burn_events.push(CommitmentLog {
                     block_number,
                     user: event.data[0].to_hex_string(),
@@ -125,6 +124,8 @@ pub async fn fetch_l2_events<P: TestProvider>(
                     elements_count: event.data[3].to_hex_string(),
                     transaction_hash: event.transaction_hash.to_hex_string(),
                 });
+            } else {
+                warn!("Unknown or malformed event: {:?}", event);
             }
         }
 
@@ -135,8 +136,16 @@ pub async fn fetch_l2_events<P: TestProvider>(
     }
 
     let max_block = std::cmp::max(
-        burn_events.iter().map(|e| e.block_number).max().unwrap_or(start_block),
-        withdrawal_events.iter().map(|e| e.block_number).max().unwrap_or(start_block),
+        burn_events
+            .iter()
+            .map(|e| e.block_number)
+            .max()
+            .unwrap_or(start_block),
+        withdrawal_events
+            .iter()
+            .map(|e| e.block_number)
+            .max()
+            .unwrap_or(start_block),
     );
 
     update_last_processed_block(&mut conn, "l2_events_last_block", max_block).await?;
