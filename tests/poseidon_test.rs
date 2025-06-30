@@ -1,12 +1,10 @@
-// Simple program to verify our Poseidon hash implementation
-use starknet_ff::Felt;
-use starknet_crypto::{poseidon_hash, poseidon_hash_many, PoseidonHasher};
+use starknet_crypto::{poseidon_hash, poseidon_hash_many, Felt, PoseidonHasher};
 
 fn main() {
     println!("Testing Poseidon hash implementation...");
     
     // Test values
-    let recipient = Felt::from_hex_str("0x01234567890abcdef01234567890abcdef01234567890abcdef01234567890abc").unwrap();
+    let recipient = Felt::from_hex("0x01234567890abcdef01234567890abcdef01234567890abcdef01234567890abc").unwrap();
     let amount = Felt::from(1000000_u128);
     let nonce = Felt::from(42_u64);
     let timestamp = Felt::from(1650000000_u64);
