@@ -1,5 +1,5 @@
 use crate::db::database::{get_last_processed_block, update_last_processed_block, insert_deposit_hash_event, DepositHashAppended};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use sqlx::PgPool;
 use tracing::log::{warn, debug};
 
@@ -14,10 +14,11 @@ use alloy::{
 };
 
 // Name of the table for storing block tracker
-const BLOCK_TRACKER_KEY: &str = "l1_deposit_events_last_block";
-const DEPOSIT_HASH_BLOCK_TRACKER_KEY: &str = "l1_deposit_hash_events_last_block";
+pub const BLOCK_TRACKER_KEY: &str = "l1_deposit_events_last_block";
+pub const DEPOSIT_HASH_BLOCK_TRACKER_KEY: &str = "l1_deposit_hash_events_last_block";
 
 sol! {
+    #[derive(Debug)]
     contract ZeroXBridge {
         enum AssetType {
             ETH,
@@ -42,7 +43,7 @@ pub async fn fetch_l1_deposit_events(
     rpc_url: &str,
     from_block: u64,
     contract_addr: &str,
-) -> Result<Vec<Log<ZeroXBridge::DepositEvent>>, Box<dyn std::error::Error>> {
+) -> Result<(Vec<Log<ZeroXBridge::DepositEvent>>, Vec<Log<ZeroXBridge::DepositHashAppended>>,),Box<dyn std::error::Error>,> {
     // Load last processed block for DepositEvent
     let from_block_deposit = match get_last_processed_block(db_pool, BLOCK_TRACKER_KEY).await {
         Ok(Some(last_block)) => last_block + 1,
@@ -69,12 +70,11 @@ pub async fn fetch_l1_deposit_events(
 
     // Fetch and store DepositHashAppended logs
     let hash_logs = fetch_deposit_hash_appended_events(db_pool, rpc_url, from_block_hash, contract_addr).await?;
-
     // Update last processed block for DepositEvent
     if let Some(last_log) = deposit_logs.last() {
         let block_number = last_log.block_number.ok_or("Block number not found")?;
         let mut conn = db_pool.acquire().await?;
-        if let Err(e) = update_last_processed_block(&mut conn, BLOCK_TRACKER_KEY, block_number).await {
+        if let Err(e) = update_last_processed_block(db_pool, BLOCK_TRACKER_KEY, block_number).await {
             warn!("Failed to update last processed block for DepositEvent: {}", e);
         }
     }
@@ -87,10 +87,7 @@ async fn fetch_events_logs_at_address<T>(
     from_block: u64,
     contract_addr: &str,
     event_name: &str,
-) -> Result<Vec<Log<T>>, Box<dyn std::error::Error>>
-where
-    T: alloy::sol_types::SolEvent,
-{
+ ) -> Result<Vec<Log<T>>> {
     let contract_addr = Address::from_str(contract_addr)?;
 
     let provider = ProviderBuilder::new().connect(rpc_url).await?;
@@ -109,12 +106,12 @@ where
     Ok(decoded_logs)
 }
 
-async fn fetch_deposit_hash_appended_events(
+pub async fn fetch_deposit_hash_appended_events(
     db_pool: &PgPool,
     rpc_url: &str,
     from_block: u64,
     contract_addr: &str,
-) -> Result<Vec<Log<ZeroXBridge::DepositHashAppended>>, Box<dyn std::error::Error>> {
+) -> Result<Vec<Log<ZeroXBridge::DepositHashAppended>>> {
     let event_name = ZeroXBridge::DepositHashAppended::SIGNATURE;
     let logs = fetch_events_logs_at_address(rpc_url, from_block, contract_addr, event_name).await?;
 
@@ -124,11 +121,11 @@ async fn fetch_deposit_hash_appended_events(
         let event: &ZeroXBridge::DepositHashAppended = log.data();
         let deposit_hash_event = DepositHashAppended {
             id: 0, // Set by database
-            index: event.index.as_u64() as i64,
+            index: event.index.to_string().parse::<u64>().unwrap() as i64,
             commitment_hash: event.commitmentHash.0.to_vec(),
             root_hash: event.rootHash.0.to_vec(),
-            elements_count: event.elementsCount.as_u64() as i64,
-            block_number: log.block_number.ok_or("Block number not found")?.to::<u64>() as i64,
+            elements_count: event.elementsCount.to_string().parse::<u64>().unwrap() as i64,
+            block_number: log.block_number.ok_or("Block number not found")? as i64,
             created_at: None, // Set by database
             updated_at: None, // Set by database
         };
@@ -150,7 +147,7 @@ async fn fetch_deposit_hash_appended_events(
     if let Some(last_log) = logs.last() {
         let block_number = last_log.block_number.ok_or("Block number not found")?;
         let mut conn = db_pool.acquire().await?;
-        if let Err(e) = update_last_processed_block(&mut conn, DEPOSIT_HASH_BLOCK_TRACKER_KEY, block_number).await {
+        if let Err(e) = update_last_processed_block(db_pool, DEPOSIT_HASH_BLOCK_TRACKER_KEY, block_number).await {
             warn!("Failed to update last processed block for DepositHashAppended: {}", e);
         }
     }

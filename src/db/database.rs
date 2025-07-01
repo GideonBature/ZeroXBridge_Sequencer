@@ -225,7 +225,7 @@ pub async fn update_withdrawal_status(
 }
 
 pub async fn update_last_processed_block(
-    conn: &mut PgConnection,
+    conn: &PgPool,
     key: &str,
     block_number: u64,
 ) -> Result<(), sqlx::Error> {
@@ -246,7 +246,6 @@ pub async fn update_last_processed_block(
 }
 
 pub async fn get_last_processed_block(
-    //conn: &mut PgConnection,
     conn: &PgPool,
     key: &str,
 ) -> Result<Option<u64>, sqlx::Error> {

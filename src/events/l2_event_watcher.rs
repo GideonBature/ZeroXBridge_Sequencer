@@ -49,7 +49,7 @@ pub async fn fetch_l2_burn_events<P: TestProvider>(
     let mut conn = db_pool.acquire().await?;
 
     // Load last processed block if available
-    let start_block = match get_last_processed_block(&mut conn, BLOCK_TRACKER_KEY).await {
+    let start_block = match get_last_processed_block(db_pool, BLOCK_TRACKER_KEY).await {
         Ok(Some(last_block)) => last_block + 1,
         Ok(None) => from_block,
         Err(e) => {
@@ -136,13 +136,13 @@ pub async fn fetch_l2_burn_events<P: TestProvider>(
             .map(|e| e.block_number)
             .max()
             .unwrap_or(start_block);
-        if let Err(e) = update_last_processed_block(&mut conn, BLOCK_TRACKER_KEY, max_block).await {
+        if let Err(e) = update_last_processed_block(db_pool, BLOCK_TRACKER_KEY, max_block).await {
             warn!("Failed to update last processed block: {}", e);
         }
     } else if latest_block > start_block {
         // Even if no events found, update the last processed block to avoid rescanning
         if let Err(e) =
-            update_last_processed_block(&mut conn, BLOCK_TRACKER_KEY, latest_block).await
+            update_last_processed_block(db_pool, BLOCK_TRACKER_KEY, latest_block).await
         {
             warn!("Failed to update last processed block: {}", e);
         }
