@@ -8,11 +8,13 @@ use crate::db::database::{
     Withdrawal,
 };
 
+// UPDATED: Added l1_token field
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateWithdrawalRequest {
     pub stark_pub_key: String,
     pub amount: i64,
     pub commitment_hash: String,
+    pub l1_token: String, // ADDED: New required field
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -65,6 +67,15 @@ pub async fn create_withdrawal(
     Extension(pool): Extension<PgPool>,
     Json(payload): Json<CreateWithdrawalRequest>,
 ) -> Result<Json<WithrawalResponse>, (StatusCode, String)> {
+    // ADDED: Validation logic
+    if payload.amount <= 0
+        || payload.stark_pub_key.trim().is_empty()
+        || payload.commitment_hash.trim().is_empty()
+        || payload.l1_token.trim().is_empty()
+    {
+        return Err((StatusCode::BAD_REQUEST, "Invalid input".to_string()));
+    }
+
     let withdrawal_id = insert_withdrawal(
         &pool,
         &payload.stark_pub_key,
