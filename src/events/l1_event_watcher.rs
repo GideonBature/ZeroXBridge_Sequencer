@@ -1,12 +1,15 @@
-use crate::db::database::{get_last_processed_block, update_last_processed_block, insert_deposit_hash_event, DepositHashAppended};
-use anyhow::{Result, anyhow};
+use crate::db::database::{
+    get_last_processed_block, insert_deposit_hash_event, update_last_processed_block,
+    DepositHashAppended,
+};
+use anyhow::Result;
 use sqlx::PgPool;
-use tracing::log::{warn, debug};
+use tracing::log::{debug, warn};
 
 use std::str::FromStr;
 
 use alloy::{
-    primitives::{Address, B256, U256},
+    primitives::{Address, B256},
     providers::{Provider, ProviderBuilder},
     rpc::types::{Filter, Log},
     sol,
@@ -43,7 +46,13 @@ pub async fn fetch_l1_deposit_events(
     rpc_url: &str,
     from_block: u64,
     contract_addr: &str,
-) -> Result<(Vec<Log<ZeroXBridge::DepositEvent>>, Vec<Log<ZeroXBridge::DepositHashAppended>>,),Box<dyn std::error::Error>,> {
+) -> Result<
+    (
+        Vec<Log<ZeroXBridge::DepositEvent>>,
+        Vec<Log<ZeroXBridge::DepositHashAppended>>,
+    ),
+    Box<dyn std::error::Error>,
+> {
     // Load last processed block for DepositEvent
     let from_block_deposit = match get_last_processed_block(db_pool, BLOCK_TRACKER_KEY).await {
         Ok(Some(last_block)) => last_block + 1,
@@ -55,31 +64,42 @@ pub async fn fetch_l1_deposit_events(
     };
 
     // Load last processed block for DepositHashAppended
-    let from_block_hash = match get_last_processed_block(db_pool, DEPOSIT_HASH_BLOCK_TRACKER_KEY).await {
-        Ok(Some(last_block)) => last_block + 1,
-        Ok(None) => from_block,
-        Err(e) => {
-            warn!("Failed to get last processed block for DepositHashAppended: {}", e);
-            from_block
-        }
-    };
+    let from_block_hash =
+        match get_last_processed_block(db_pool, DEPOSIT_HASH_BLOCK_TRACKER_KEY).await {
+            Ok(Some(last_block)) => last_block + 1,
+            Ok(None) => from_block,
+            Err(e) => {
+                warn!(
+                    "Failed to get last processed block for DepositHashAppended: {}",
+                    e
+                );
+                from_block
+            }
+        };
 
     // Fetch DepositEvent logs
     let event_name = ZeroXBridge::DepositEvent::SIGNATURE;
-    let deposit_logs = fetch_events_logs_at_address(rpc_url, from_block_deposit, contract_addr, event_name).await?;
+    let deposit_logs =
+        fetch_events_logs_at_address(rpc_url, from_block_deposit, contract_addr, event_name)
+            .await?;
 
     // Fetch and store DepositHashAppended logs
-    let hash_logs = fetch_deposit_hash_appended_events(db_pool, rpc_url, from_block_hash, contract_addr).await?;
+    let hash_logs =
+        fetch_deposit_hash_appended_events(db_pool, rpc_url, from_block_hash, contract_addr)
+            .await?;
     // Update last processed block for DepositEvent
     if let Some(last_log) = deposit_logs.last() {
         let block_number = last_log.block_number.ok_or("Block number not found")?;
-        let mut conn = db_pool.acquire().await?;
-        if let Err(e) = update_last_processed_block(db_pool, BLOCK_TRACKER_KEY, block_number).await {
-            warn!("Failed to update last processed block for DepositEvent: {}", e);
+        if let Err(e) = update_last_processed_block(db_pool, BLOCK_TRACKER_KEY, block_number).await
+        {
+            warn!(
+                "Failed to update last processed block for DepositEvent: {}",
+                e
+            );
         }
     }
 
-    Ok(deposit_logs)
+    Ok((deposit_logs, hash_logs))
 }
 
 async fn fetch_events_logs_at_address<T>(
@@ -87,7 +107,10 @@ async fn fetch_events_logs_at_address<T>(
     from_block: u64,
     contract_addr: &str,
     event_name: &str,
- ) -> Result<Vec<Log<T>>> {
+) -> Result<Vec<Log<T>>, Box<dyn std::error::Error>>
+where
+    T: alloy::sol_types::SolEvent,
+{
     let contract_addr = Address::from_str(contract_addr)?;
 
     let provider = ProviderBuilder::new().connect(rpc_url).await?;
@@ -111,13 +134,11 @@ pub async fn fetch_deposit_hash_appended_events(
     rpc_url: &str,
     from_block: u64,
     contract_addr: &str,
-) -> Result<Vec<Log<ZeroXBridge::DepositHashAppended>>> {
+) -> Result<Vec<Log<ZeroXBridge::DepositHashAppended>>, Box<dyn std::error::Error>> {
     let event_name = ZeroXBridge::DepositHashAppended::SIGNATURE;
     let logs = fetch_events_logs_at_address(rpc_url, from_block, contract_addr, event_name).await?;
 
     for log in &logs {
-        // let event = &log.data;
-        //let event = log.data();
         let event: &ZeroXBridge::DepositHashAppended = log.data();
         let deposit_hash_event = DepositHashAppended {
             id: 0, // Set by database
@@ -146,9 +167,14 @@ pub async fn fetch_deposit_hash_appended_events(
     // Update last processed block
     if let Some(last_log) = logs.last() {
         let block_number = last_log.block_number.ok_or("Block number not found")?;
-        let mut conn = db_pool.acquire().await?;
-        if let Err(e) = update_last_processed_block(db_pool, DEPOSIT_HASH_BLOCK_TRACKER_KEY, block_number).await {
-            warn!("Failed to update last processed block for DepositHashAppended: {}", e);
+        // let mut conn = db_pool.acquire().await?;
+        if let Err(e) =
+            update_last_processed_block(db_pool, DEPOSIT_HASH_BLOCK_TRACKER_KEY, block_number).await
+        {
+            warn!(
+                "Failed to update last processed block for DepositHashAppended: {}",
+                e
+            );
         }
     }
 
