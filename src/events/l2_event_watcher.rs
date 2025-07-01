@@ -141,7 +141,7 @@ pub async fn fetch_l2_events<P: TestProvider>(
             .map(|e| e.block_number)
             .max()
             .unwrap_or(start_block),
-        withdrawal_events
+    withdrawal_events
             .iter()
             .map(|e| e.block_number)
             .max()
