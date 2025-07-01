@@ -29,7 +29,7 @@ fn verify_commitment_in_root(
             } else {
                 core::pedersen::pedersen(*proof_element, computed_root)
             };
-    }
+    };
 
     assert(computed_root == new_root, 'Computed root does not match');
 
@@ -59,7 +59,7 @@ fn main(input: Array<felt252>) -> Array<felt252> {
     let mut proof = ArrayTrait::new();
     for i in 2..input.len() {
         proof.append(*input.at(i));
-    }
+    };
     let verified_root = verify_commitment_in_root(*input.at(1), proof, *input.at(0));
 
     let mut result_array = ArrayTrait::new();

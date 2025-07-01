@@ -1,5 +1,7 @@
 use core::poseidon::PoseidonTrait;
 use core::hash::HashStateTrait;
+use cairo_lib::data_structures::mmr::mmr::MMR;
+use cairo_lib::data_structures::mmr::mmr::MMRTrait;
 
 pub type MmrProof = Span<felt252>;
 
@@ -30,20 +32,20 @@ pub impl MmrProofImpl of MmrProofTrait {
         let mut current_hash = leaf_hash;
         let mut current_index = leaf_index;
         let mut i = 0;
-        
+
         loop {
             if i >= self.len() {
                 break current_hash;
             }
-            
+
             let sibling_hash = *self[i];
-            
+
             if current_index % 2 == 0 {
                 current_hash = PoseidonHasherImpl::hash_double(current_hash, sibling_hash);
             } else {
                 current_hash = PoseidonHasherImpl::hash_double(sibling_hash, current_hash);
             }
-            
+
             current_index /= 2;
             i += 1;
         }
@@ -56,14 +58,14 @@ pub impl MmrPeaksImpl of MmrPeaksTrait {
         if self.is_empty() {
             return 0;
         }
-        
+
         if self.len() == 1 {
             return *self[0];
         }
-        
+
         let mut result = *self[self.len() - 1];
         let mut i = self.len() - 1;
-        
+
         loop {
             if i == 0 {
                 break result;
@@ -80,21 +82,17 @@ pub impl MmrPeaksImpl of MmrPeaksTrait {
 }
 
 pub fn verify_proof(
-    leaf: felt252,
-    leaf_index: usize, 
-    proof: MmrProof,
-    peaks: MmrPeaks,
-    root: felt252
+    leaf: felt252, leaf_index: usize, proof: MmrProof, peaks: MmrPeaks, root: felt252,
 ) -> bool {
     if !peaks.valid(root) {
         return false;
     }
-    
+
     if peaks.len() == 1 {
         let computed_peak = proof.compute_peak(leaf_index, leaf);
         return computed_peak == *peaks[0];
     }
-    
+
     if !proof.is_empty() {
         let computed_peak = proof.compute_peak(leaf_index, leaf);
         let mut i = 0;
@@ -122,15 +120,12 @@ pub fn verify_proof(
 }
 
 pub fn verify_proof_simple(
-    leaf: felt252,
-    leaf_index: usize,
-    proof: MmrProof, 
-    root: felt252
+    leaf: felt252, leaf_index: usize, proof: MmrProof, root: felt252,
 ) -> bool {
     if proof.is_empty() {
         return leaf == root;
     }
-    
+
     let computed_root = proof.compute_peak(leaf_index, leaf);
     computed_root == root
 }
@@ -144,9 +139,9 @@ mod tests {
         let left = 1;
         let right = 2;
         let hash = PoseidonHasherImpl::hash_double(left, right);
-        
+
         assert(hash != 0, 'Hash should not be zero');
-        
+
         let hash2 = PoseidonHasherImpl::hash_double(left, right);
         assert(hash == hash2, 'Hash should be deterministic');
     }
@@ -155,8 +150,8 @@ mod tests {
     fn test_simple_proof_verification() {
         let leaf = 42;
         let proof = array![].span();
-        let root = leaf; 
-        
+        let root = leaf;
+
         let result = verify_proof_simple(leaf, 0, proof, root);
         assert(result, 'Single node verification failed');
     }
@@ -165,13 +160,13 @@ mod tests {
     fn test_two_node_mmr() {
         let leaf1 = 10;
         let leaf2 = 20;
-        
+
         let root = PoseidonHasherImpl::hash_double(leaf1, leaf2);
-        
+
         let proof1 = array![leaf2].span();
         let result1 = verify_proof_simple(leaf1, 0, proof1, root);
         assert(result1, 'Two-node proof1 failed');
-        
+
         let proof2 = array![leaf1].span();
         let result2 = verify_proof_simple(leaf2, 1, proof2, root);
         assert(result2, 'Two-node proof2 failed');
@@ -182,10 +177,10 @@ mod tests {
         let leaf = 42;
         let wrong_sibling = 99;
         let correct_sibling = 24;
-        
+
         let correct_root = PoseidonHasherImpl::hash_double(leaf, correct_sibling);
         let wrong_proof = array![wrong_sibling].span();
-        
+
         let result = verify_proof_simple(leaf, 0, wrong_proof, correct_root);
         assert(!result, 'Invalid proof should fail');
     }
@@ -210,11 +205,13 @@ mod tests {
         let peak1 = 100;
         let peak2 = 200;
         let peak3 = 300;
-        
+
         let peaks = array![peak1, peak2, peak3].span();
         let root = peaks.bag();
-        
-        let expected = PoseidonHasherImpl::hash_double(peak1, PoseidonHasherImpl::hash_double(peak2, peak3));
+
+        let expected = PoseidonHasherImpl::hash_double(
+            peak1, PoseidonHasherImpl::hash_double(peak2, peak3),
+        );
         assert(root == expected, 'Multiple peaks bagging failed');
     }
 
@@ -224,12 +221,12 @@ mod tests {
         let peak2 = 200;
         let peaks = array![peak1, peak2].span();
         let root = peaks.bag();
-        
+
         let is_valid = peaks.valid(root);
         assert(is_valid, 'Peaks validation failed');
-        
+
         let wrong_root = 999;
         let is_invalid = peaks.valid(wrong_root);
         assert(!is_invalid, 'Wrong root validation failed');
     }
-} 
+}
