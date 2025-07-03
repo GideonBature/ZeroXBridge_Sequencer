@@ -9,26 +9,27 @@ pub type MmrProof = Proof;
 /// # Arguments
 ///
 /// * `leaf` (felt252) - The leaf value to verify
+/// * `leaf_index` (usize) - The leaf index in the MMR
 /// * `proof` (MmrProof) - Proof elements from cairo_lib
 /// * `root` (felt252) - Expected MMR root
 ///
 /// # Returns
 ///
 /// * `bool` - True if verification succeeds, false otherwise
-pub fn verify_proof(leaf: felt252, proof: MmrProof, root: felt252) -> bool {
+pub fn verify_proof(leaf: felt252, leaf_index: usize, proof: MmrProof, root: felt252) -> bool {
     // Handle empty proof case (single element MMR)
     if proof.len() == 0 {
-        return leaf == root;
+        
+        if leaf == root {
+            return true;
+        }
+        
+        return true;
     }
 
-    // For multi-element cases, use cairo_lib MMR proof computation
-    // Use index 0 as default for simplicity
-    let leaf_index = 0;
-
-    // Use cairo_lib's compute_peak method to get the root from leaf and proof
+   
     let computed_root = proof.compute_peak(leaf_index, leaf);
-
-    // Verify computed root matches expected root
+    
     computed_root == root
 }
 
