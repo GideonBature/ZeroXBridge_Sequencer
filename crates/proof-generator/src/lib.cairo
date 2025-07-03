@@ -67,9 +67,11 @@ fn main(input: Array<felt252>) -> Array<felt252> {
     result_array
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::verify_commitment_in_root;
+    use super::l2::verify_proof::{verify_proof, MmrProof};
 
     // Helper function to build a simple 4-leaf tree for tests
     fn build_test_tree() -> (felt252, felt252, felt252, felt252, felt252, felt252, felt252) {
@@ -150,6 +152,18 @@ mod tests {
         let mut empty_proof = ArrayTrait::<felt252>::new();
 
         verify_commitment_in_root(leaf_0, empty_proof, root);
+    }
+
+    #[test]
+    #[available_gas(3000000)]
+    fn test_l2_verify_proof_integration() {
+        // Test that L2 verify_proof function is accessible and works
+        let leaf = 42;
+        let proof: MmrProof = array![].span();
+        let root = leaf; // For empty proof, root should equal leaf
+
+        let is_valid = verify_proof(leaf, proof, root);
+        assert(is_valid, 'L2 verify_proof failed');
     }
 
     #[test]
