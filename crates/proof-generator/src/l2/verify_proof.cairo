@@ -19,17 +19,11 @@ pub type MmrProof = Proof;
 pub fn verify_proof(leaf: felt252, leaf_index: usize, proof: MmrProof, root: felt252) -> bool {
     // Handle empty proof case (single element MMR)
     if proof.len() == 0 {
-        
-        if leaf == root {
-            return true;
-        }
-        
-        return true;
+        return leaf == root;
     }
 
-   
     let computed_root = proof.compute_peak(leaf_index, leaf);
-    
+
     computed_root == root
 }
 

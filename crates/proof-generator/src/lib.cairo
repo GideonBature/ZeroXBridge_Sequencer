@@ -154,7 +154,7 @@ mod tests {
         verify_commitment_in_root(leaf_0, empty_proof, root);
     }
 
-        #[test]
+    #[test]
     #[available_gas(3000000)]
     fn test_l2_verify_proof_integration() {
         // Test that L2 verify_proof function is accessible and works
@@ -162,21 +162,11 @@ mod tests {
         let leaf_index = 0; // Use index 0 for single element MMR
         let proof: MmrProof = array![].span();
         let root = leaf; // For empty proof, root should equal leaf
-        
+
         let is_valid = verify_proof(leaf, leaf_index, proof, root);
         assert(is_valid, 'L2 verify_proof failed');
     }
 
-    #[test]
-    #[available_gas(5000000)]
-    fn test_zeroXBridge_leaf() {
-        let leaf = 3085182978037364507644541379307921604860861694664657935759708330416374536741;
-        let leaf_index = 1;
-        let proof: MmrProof = array![].span();
-        let root = 141600122776546992117059929226023560733491784522562670496538272876780698362;
-        let is_valid = verify_proof(leaf, leaf_index, proof, root);
-        assert(is_valid, 'Invalid root validation')
-    }
 
     #[test]
     #[available_gas(2000000)]
