@@ -3,7 +3,7 @@ use mockall::predicate::*;
 use mockall::*;
 use starknet::core::types::{EmittedEvent, EventFilter, EventsPage, Felt};
 
-use zeroxbridge_sequencer::events::fetch_l2_burn_events;
+use zeroxbridge_sequencer::events::fetch_l2_events;
 use zeroxbridge_sequencer::events::l2_event_watcher::TestProvider;
 
 #[path = "utils.rs"]
@@ -47,7 +47,7 @@ mod tests {
     use utils::create_test_app;
 
     // Helper function to create a test event
-    fn create_test_event(
+    fn create_test_burn_event(
         block_number: u64,
         tx_hash: &str,
         user: &str,
@@ -83,8 +83,8 @@ mod tests {
 
         // Create test events
         let test_events = vec![
-            create_test_event(95, "0x123", "0x1234567890abcdef", "0x1000", "0x0", "0xabc"),
-            create_test_event(96, "0x456", "0xfedcba0987654321", "0x2000", "0x0", "0xdef"),
+            create_test_burn_event(95, "0x123", "0x1234567890abcdef", "0x1000", "0x0", "0xabc"),
+            create_test_burn_event(96, "0x456", "0xfedcba0987654321", "0x2000", "0x0", "0xdef"),
         ];
 
         // Mock get_events response
@@ -95,15 +95,15 @@ mod tests {
             })
         });
 
-        let result = fetch_l2_burn_events(&app.config, &app.db, 90, &mock_provider).await?;
+        let result = fetch_l2_events(&app.config, &app.db, 90, &mock_provider).await?;
 
-        assert_eq!(result.len(), 2);
-        assert_eq!(result[0].commitment_hash, "0xabc");
-        assert_eq!(result[0].block_number, 95);
-        assert_eq!(result[0].transaction_hash, "0x123");
-        assert_eq!(result[1].commitment_hash, "0xdef");
-        assert_eq!(result[1].block_number, 96);
-        assert_eq!(result[1].transaction_hash, "0x456");
+        assert_eq!(result.burn_events.len(), 2);
+        assert_eq!(result.burn_events[0].commitment_hash, "0xabc");
+        assert_eq!(result.burn_events[0].block_number, 95);
+        assert_eq!(result.burn_events[0].transaction_hash, "0x123");
+        assert_eq!(result.burn_events[1].commitment_hash, "0xdef");
+        assert_eq!(result.burn_events[1].block_number, 96);
+        assert_eq!(result.burn_events[1].transaction_hash, "0x456");
 
         Ok(())
     }
@@ -115,7 +115,7 @@ mod tests {
 
         mock_provider.expect_block_number().returning(|| Ok(100));
 
-        let test_events = vec![create_test_event(
+        let test_events = vec![create_test_burn_event(
             95,
             "0x123",
             "0x1234567890abcdef",
@@ -135,17 +135,17 @@ mod tests {
             });
 
         // First call: should process blocks 90-95
-        let result = fetch_l2_burn_events(&app.config, &app.db, 90, &mock_provider).await?;
-        assert_eq!(result.len(), 1);
+        let result = fetch_l2_events(&app.config, &app.db, 90, &mock_provider).await?;
+        assert_eq!(result.burn_events.len(), 1);
 
         // Verify block tracker was updated
         let last_block = sqlx::query!(
-            "SELECT last_block FROM block_trackers WHERE key = 'l2_burn_events_last_block'"
+            "SELECT last_block FROM block_trackers WHERE key = 'l2_events_last_block'"
         )
         .fetch_one(&app.db)
         .await?;
 
-        assert_eq!(result[0].block_number, 95);
+        assert_eq!(result.burn_events[0].block_number, 95);
         assert_eq!(last_block.last_block, 95);
 
         Ok(())
@@ -158,7 +158,7 @@ mod tests {
 
         mock_provider.expect_block_number().returning(|| Ok(100));
 
-        let test_events = vec![create_test_event(
+        let test_events = vec![create_test_burn_event(
             95,
             "0x123",
             "0x1234567890abcdef",
@@ -174,14 +174,14 @@ mod tests {
             })
         });
 
-        let result = fetch_l2_burn_events(&app.config, &app.db, 92, &mock_provider).await?;
+        let result = fetch_l2_events(&app.config, &app.db, 92, &mock_provider).await?;
 
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].commitment_hash, "0xabc");
-        assert_eq!(result[0].block_number, 95);
-        assert_eq!(result[0].transaction_hash, "0x123");
-        assert_eq!(result[0].amount_low, "0xffffffffffffffff");
-        assert_eq!(result[0].amount_high, "0x1");
+        assert_eq!(result.burn_events.len(), 1);
+        assert_eq!(result.burn_events[0].commitment_hash, "0xabc");
+        assert_eq!(result.burn_events[0].block_number, 95);
+        assert_eq!(result.burn_events[0].transaction_hash, "0x123");
+        assert_eq!(result.burn_events[0].amount_low, "0xffffffffffffffff");
+        assert_eq!(result.burn_events[0].amount_high, "0x1");
 
         Ok(())
     }

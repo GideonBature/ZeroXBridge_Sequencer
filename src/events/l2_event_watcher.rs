@@ -1,19 +1,17 @@
 use crate::config::AppConfig;
 use crate::db::database::{get_last_processed_block, update_last_processed_block};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use starknet::core::types::{BlockId, EventFilter, EventsPage, Felt};
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::log::{info, warn};
+use tracing::log::warn;
 
 const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY_MS: u64 = 1000;
 const DEFAULT_PAGE_SIZE: u64 = 100;
 
-// Name of the table for storing block tracker
-const BLOCK_TRACKER_KEY: &str = "l2_burn_events_last_block";
 // Event key for BurnEvent (calculated from event name "BurnEvent")
 const BURN_EVENT_KEY: &str = "0x0099de3f38fed0a76764f614c6bc2b958814813685abc1af6deedab612df44f3";
 // Event key for WithdrawalHashAppended
@@ -67,9 +65,7 @@ pub async fn fetch_l2_events<P: TestProvider>(
     from_block: u64,
     provider: &P,
 ) -> Result<L2EventResults> {
-    let mut conn = db_pool.acquire().await?;
-
-    let start_block = match get_last_processed_block(&mut conn, "l2_events_last_block").await {
+    let start_block = match get_last_processed_block(&db_pool, "l2_events_last_block").await {
         Ok(Some(last)) => last + 1,
         _ => from_block,
     };
@@ -141,14 +137,14 @@ pub async fn fetch_l2_events<P: TestProvider>(
             .map(|e| e.block_number)
             .max()
             .unwrap_or(start_block),
-    withdrawal_events
+        withdrawal_events
             .iter()
             .map(|e| e.block_number)
             .max()
             .unwrap_or(start_block),
     );
 
-    update_last_processed_block(&mut conn, "l2_events_last_block", max_block).await?;
+    update_last_processed_block(&db_pool, "l2_events_last_block", max_block).await?;
 
     Ok(L2EventResults {
         burn_events,
