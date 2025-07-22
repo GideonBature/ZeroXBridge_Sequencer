@@ -1,11 +1,11 @@
 use crate::queue::l2_queue::L2Transaction;
 use sqlx::{Pool, Postgres};
+use starknet::accounts::Account;
 use starknet::accounts::ConnectedAccount;
 use starknet::accounts::ExecutionEncoding;
 use starknet::core::chain_id::MAINNET;
 use starknet::core::types::ExecutionResult;
 use starknet::core::types::StarknetError;
-// or TESTNET
 use starknet::core::types::{Felt, TransactionReceipt};
 use starknet::providers::jsonrpc::HttpTransport;
 use starknet::providers::jsonrpc::JsonRpcClient;
@@ -244,7 +244,7 @@ impl StarknetRelayer {
 
         // Extract withdrawal ID from transaction
         let withdrawal_id = tx.id.clone();
-        
+
         // Extract proof array and merkle root from proof data
         let proof_array = match proof.get("proof") {
             Some(array) if array.is_array() => {
@@ -252,7 +252,9 @@ impl StarknetRelayer {
                 for item in array.as_array().unwrap() {
                     if let Some(s) = item.as_str() {
                         felts.push(Felt::from_hex(s).map_err(|_| {
-                            StarknetRelayerError::TransactionFailed("Invalid proof element".to_string())
+                            StarknetRelayerError::TransactionFailed(
+                                "Invalid proof element".to_string(),
+                            )
                         })?);
                     } else {
                         return Err(StarknetRelayerError::TransactionFailed(
@@ -279,13 +281,13 @@ impl StarknetRelayer {
         };
 
         // Initialize calldata with basic fields
-        let mut calldata = Vec::new();
-        
+        let mut calldata: Vec<Felt> = Vec::new();
+
         // Add withdrawal ID as a felt
-        calldata.push(Felt::from_u64(withdrawal_id as u64));
-        
+        calldata.push(Felt::from_str(&withdrawal_id.to_string()).unwrap());
+
         // Add proof array length
-        calldata.push(Felt::from_u64(proof_array.len() as u64));
+        calldata.push(Felt::from_str(&proof_array.len().to_string()).unwrap());
 
         // Extend calldata with proof array elements
         calldata.extend(proof_array);
@@ -298,9 +300,9 @@ impl StarknetRelayer {
             .map_err(|_| StarknetRelayerError::InvalidContractAddress)?;
 
         // Create the call
-        use starknet::core::types::{Call, FunctionCall};
+        use starknet::core::types::Call;
         use starknet::macros::selector;
-        
+
         let calls = vec![Call {
             to: contract_address,
             selector: selector!("process_withdrawal"),
@@ -308,17 +310,26 @@ impl StarknetRelayer {
         }];
 
         // Execute the transaction
-        info!("Sending transaction to Starknet contract: {}", &self.config.bridge_contract_address);
-        
+        info!(
+            "Sending transaction to Starknet contract: {}",
+            &self.config.bridge_contract_address
+        );
+
         // Execute the call and get the transaction hash
-        let result = match self.account.execute(calls).send().await {
+        let result = match self.account.execute_v3(calls).send().await {
             Ok(result) => {
-                info!("Transaction sent successfully with hash: {}", result.transaction_hash);
+                info!(
+                    "Transaction sent successfully with hash: {}",
+                    result.transaction_hash
+                );
                 result.transaction_hash
             }
             Err(e) => {
                 error!("Failed to send transaction: {:?}", e);
-                return Err(StarknetRelayerError::TransactionFailed(format!("Failed to send transaction: {}", e)));
+                return Err(StarknetRelayerError::TransactionFailed(format!(
+                    "Failed to send transaction: {}",
+                    e
+                )));
             }
         };
 
