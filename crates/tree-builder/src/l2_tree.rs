@@ -65,7 +65,7 @@ impl L2MerkleTreeBuilder {
     }
 
     /// Generates a Merkle proof for a given leaf
-    pub async fn get_proof(&self, leaf: [u8; 32]) -> Result<Option<Vec<[u8; 32]>>> {
+    pub async fn get_proof(&self, leaf: [u8; 32]) -> Result<Option<Proof>> {
         let elements_count = self.mmr.elements_count.get().await?;
         let leaf_str = format!("0x{}", hex::encode(leaf));
 
@@ -87,61 +87,16 @@ impl L2MerkleTreeBuilder {
 
         if let Some(idx) = leaf_index {
             let proof = self.mmr.get_proof(idx, None).await?;
-            let mut siblings = Vec::new();
-            for h in proof.siblings_hashes {
-                siblings.push(Self::decode_hex(&h)?);
-            }
-            Ok(Some(siblings))
+            Ok(Some(proof))
         } else {
             Ok(None)
         }
     }
 
     /// Verifies a Merkle proof for a given leaf
-    pub async fn verify_proof(&self, proof: Vec<[u8; 32]>, leaf: [u8; 32]) -> Result<bool> {
-        let elements_count = self.mmr.elements_count.get().await?;
+    pub async fn verify_proof(&self, proof: Proof, leaf: [u8; 32]) -> Result<bool> {
         let leaf_str = format!("0x{}", hex::encode(leaf));
-
-        // Find the leaf index
-        let mut leaf_index = None;
-        for i in 1..=elements_count {
-            if let Some(hash) = self
-                .mmr
-                .hashes
-                .get(accumulators::store::SubKey::Usize(i))
-                .await?
-            {
-                if hash == leaf_str {
-                    leaf_index = Some(i);
-                    break;
-                }
-            }
-        }
-
-        if let Some(idx) = leaf_index {
-            let peaks = self
-                .mmr
-                .get_peaks(accumulators::mmr::PeaksOptions {
-                    elements_count: Some(elements_count),
-                    formatting_opts: None,
-                })
-                .await?;
-
-            let proof_obj = Proof {
-                element_index: idx,
-                element_hash: leaf_str.clone(),
-                siblings_hashes: proof
-                    .into_iter()
-                    .map(|p| format!("0x{}", hex::encode(p)))
-                    .collect(),
-                peaks_hashes: peaks,
-                elements_count,
-            };
-
-            Ok(self.mmr.verify_proof(proof_obj, leaf_str, None).await?)
-        } else {
-            Ok(false)
-        }
+        Ok(self.mmr.verify_proof(proof, leaf_str, None).await?)
     }
 }
 
