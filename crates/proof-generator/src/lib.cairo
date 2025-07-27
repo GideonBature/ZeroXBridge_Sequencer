@@ -1,3 +1,4 @@
+mod l1;
 mod l2;
 
 /// Verifies a Merkle proof for a given leaf hash against an expected root hash
