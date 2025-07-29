@@ -1,4 +1,11 @@
+mod l1;
 mod l2;
+
+use core::array::{Array, ArrayTrait, SpanTrait};
+use core::traits::{Into, TryInto};
+use l1::verify_proof::verify_mmr_proof as verify_l1;
+use l2::verify_proof::verify_proof as verify_l2;
+
 
 /// Verifies a Merkle proof for a given leaf hash against an expected root hash
 ///
@@ -29,7 +36,7 @@ fn verify_commitment_in_root(
             } else {
                 core::pedersen::pedersen(*proof_element, computed_root)
             };
-    };
+    }
 
     assert(computed_root == new_root, 'Computed root does not match');
 
@@ -37,41 +44,136 @@ fn verify_commitment_in_root(
 }
 
 
-/// Verifies a Merkle proof by computing the root from a leaf and its siblings.
+/// Entry point for verifying Merkle proofs on L1 or L2
 ///
-/// This function takes a flattened array containing the expected Merkle root,
-/// the leaf hash, and the sibling hashes that constitute the proof path.
+/// This function takes a flat input array and decides whether to verify the proof
+/// using the L1 or L2 method, based on the `mode` argument.
 ///
-/// # Arguments
+/// # Input Layout (Array<felt252>)
 ///
-/// * `input` (`Array<felt252>`) - An array containing the Merkle proof components,
-///   structured precisely as follows:
-///   - `input[0]`: expected Merkle root (`root`).
-///   - `input[1]`: hash of the leaf (`leaf`).
-///   - `input[2..N]`: sibling hashes (`siblings`).
+/// - `input[0]`: mode (1 = L1, 2 = L2)
+/// - `input[1]`: root
+/// - `input[2]`: leaf
+/// - `input[3]`: leaf index
+/// - `input[4]`: MMR size
+/// - `input[5]`: number of siblings
+/// - `input[6..]`: sibling hashes
+/// - After siblings: number of peaks
+/// - Followed by: peak hashes
 ///
 /// # Returns
 ///
-/// * `Array<felt252>` - An array containing a single `felt252` element representing
-///   the computed Merkle root.
-fn main(input: Array<felt252>) -> Array<felt252> {
-    assert(input.len() >= 3, 'invalid input');
-    let mut proof = ArrayTrait::new();
-    for i in 2..input.len() {
-        proof.append(*input.at(i));
+/// - `0` if the proof is valid
+/// - `1` if the proof is invalid
+///
+/// # Panics
+///
+/// - If the input is malformed or the mode is invalid
+///
+/// # Notes
+///
+/// Cairo requires `match` arms to start from 0, so we remap:
+/// - mode 1 (L1) → 0
+/// - mode 2 (L2) → 1
+fn main(input: Array<felt252>) -> felt252 {
+    assert(input.len() >= 7, 'Invalid input length');
+
+    let mode = *input.at(0);
+    let root = *input.at(1);
+    let leaf = *input.at(2);
+
+    let leaf_index: u32 = (*input.at(3)).try_into().unwrap();
+    let mmr_size: u32 = (*input.at(4)).try_into().unwrap();
+    let num_siblings: usize = (*input.at(5)).try_into().unwrap();
+
+    let siblings_start = 6;
+    let siblings_end = siblings_start + num_siblings;
+    let num_peaks: usize = (*input.at(siblings_end)).try_into().unwrap();
+    let peaks_start = siblings_end + 1;
+    let peaks_end = peaks_start + num_peaks;
+
+    let span = input.span();
+
+    let siblings_span = span.slice(siblings_start, siblings_end);
+    let peaks_span = span.slice(peaks_start, peaks_end);
+
+    // this span conversion is neccesary for L1 proof verifier
+    let mut siblings_array = ArrayTrait::<felt252>::new();
+    for s in siblings_span {
+        siblings_array.append(*s);
+    }
+
+    let mut peaks_array = ArrayTrait::<felt252>::new();
+    for p in peaks_span {
+        peaks_array.append(*p);
+    }
+
+    // pattern matching in cairo requires values to be sequential starting from 0.
+    // So we map:
+    //   mode = 1 (L1) => 0
+    //   mode = 2 (L2) => 1
+    // same way we count indexes from 0 upwards in arrays
+    let mode_index: usize = mode.try_into().unwrap() - 1;
+
+    let is_valid = match mode_index {
+        0 => verify_l1(leaf, leaf_index, siblings_array, peaks_array, mmr_size, root),
+        1 => verify_l2(
+            leaf,
+            leaf_index.try_into().unwrap(),
+            siblings_span,
+            root,
+            mmr_size.into(),
+            peaks_array,
+        ),
+        _ => panic!(),
     };
-    let verified_root = verify_commitment_in_root(*input.at(1), proof, *input.at(0));
 
-    let mut result_array = ArrayTrait::new();
-    result_array.append(verified_root);
-    result_array
+    // Return 0 for true, 1 for false
+    if is_valid {
+        0
+    } else {
+        1
+    }
 }
+#[test]
+#[available_gas(4000000)]
+fn test_main_l1_and_l2_dispatch() {
+    let leaf = 100;
+    let leaf_index = 0;
+    let root = leaf;
+    let mmr_size = 1;
 
+    let mode_l2 = 2;
+    let mut input_l2 = ArrayTrait::<felt252>::new();
+    input_l2.append(mode_l2);
+    input_l2.append(root);       // root
+    input_l2.append(leaf);       // leaf
+    input_l2.append(leaf_index); // leaf index
+    input_l2.append(mmr_size);   // mmr size
+    input_l2.append(0);          // num_siblings
+    input_l2.append(0);          // num_peaks
+
+    let result_l2 = main(input_l2);
+    assert(result_l2 == 0, 'L2 main dispatch failed');
+
+    let mode_l1 = 1;
+    let mut input_l1 = ArrayTrait::<felt252>::new();
+    input_l1.append(mode_l1);
+    input_l1.append(root);       // root
+    input_l1.append(leaf);       // leaf
+    input_l1.append(leaf_index); // leaf index
+    input_l1.append(mmr_size);   // mmr size
+    input_l1.append(0);          // num_siblings
+    input_l1.append(0);          // num_peaks
+
+    let result_l1 = main(input_l1);
+    assert(result_l1 == 0, 'L1 main dispatch failed');
+}
 
 #[cfg(test)]
 mod tests {
+    use super::l2::verify_proof::{MmrProof, verify_proof, verify_proof_legacy};
     use super::verify_commitment_in_root;
-    use super::l2::verify_proof::{verify_proof, verify_proof_legacy, MmrProof};
 
     // Helper function to build a simple 4-leaf tree for tests
     fn build_test_tree() -> (felt252, felt252, felt252, felt252, felt252, felt252, felt252) {
