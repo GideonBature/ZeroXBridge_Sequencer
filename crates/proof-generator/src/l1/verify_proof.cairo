@@ -34,8 +34,8 @@ impl Hash256Impl of Hash256Trait {
 }
 
 /// Hashes a single felt252 value using Keccak256.
-fn keccak_hash_single(value: felt252) -> Hash256 {
-    let value_u256: u256 = value.into();
+fn keccak_hash_single(value: Hash256) -> Hash256 {
+    let value_u256: u256 = value.to_u256();
     let hash_u256 = keccak_u256s_be_inputs(array![value_u256].span());
     Hash256Trait::from_u256(hash_u256)
 }
@@ -52,14 +52,26 @@ fn keccak_hash_double(left: Hash256, right: Hash256) -> Hash256 {
 #[derive(Drop, Clone, Serde)]
 struct MmrProof {
     leaf_index: u32,
-    leaf_value: felt252,
+    leaf_value: Hash256,
     sibling_hashes: Array<Hash256>,
     peaks: Array<Hash256>,
     mmr_size: u32,
 }
+pub fn verify_mmr_proof(
+    leaf: Hash256,
+    leaf_index: u32,
+    sibling_hashes: Array<Hash256>,
+    peaks: Array<Hash256>,
+    mmr_size: u32,
+    root: Hash256,
+) -> bool {
+    let proof = MmrProof { leaf_index, leaf_value: leaf, sibling_hashes, peaks, mmr_size };
+
+    verify_proof(leaf, proof, root)
+}
 
 /// Main function to verify an MMR proof against a root.
-fn verify_proof(leaf: felt252, proof: MmrProof, root: Hash256) -> bool {
+fn verify_proof(leaf: Hash256, proof: MmrProof, root: Hash256) -> bool {
     if proof.leaf_value != leaf {
         return false;
     }
@@ -73,15 +85,12 @@ fn verify_proof(leaf: felt252, proof: MmrProof, root: Hash256) -> bool {
 }
 
 /// Computes the peak hash from a leaf and its sibling proof hashes.
-fn compute_peak_from_leaf(leaf_index: u32, leaf_value: felt252, proof: Span<Hash256>) -> Hash256 {
+fn compute_peak_from_leaf(leaf_index: u32, leaf_value: Hash256, proof: Span<Hash256>) -> Hash256 {
     let mut current_index = leaf_index;
     let mut current_hash = keccak_hash_single(leaf_value);
     let mut proof_index = 0;
 
-    loop {
-        if proof_index >= proof.len() {
-            break;
-        }
+    while proof_index < proof.len() {
         let sibling_hash = *proof.at(proof_index);
 
         // The order of hashing depends on whether the current node is a left or right child.
@@ -113,10 +122,7 @@ fn bag_peaks(peaks: Span<Hash256>) -> Hash256 {
     let mut result = *peaks.at(peaks.len() - 1);
     let mut i = peaks.len() - 1;
 
-    loop {
-        if i == 0 {
-            break;
-        }
+    while i > 0 {
         i -= 1;
         result = keccak_hash_double(*peaks.at(i), result);
     };
@@ -160,23 +166,23 @@ fn get_parent_index(index: u32) -> u32 {
     (index + 1) / 2
 }
 
-/// Helper function to create an MMR proof for testing.
-fn create_test_proof(
-    leaf_value: felt252,
-    leaf_index: u32,
-    sibling_hashes: Array<Hash256>,
-    peaks: Array<Hash256>,
-    mmr_size: u32,
-) -> MmrProof {
-    MmrProof { leaf_index, leaf_value, sibling_hashes, peaks, mmr_size }
-}
 
 #[cfg(test)]
 mod tests {
     use super::{
-        verify_proof, keccak_hash_single, keccak_hash_double, create_test_proof, Hash256,
-        Hash256Trait, MmrProof
+        Hash256, Hash256Trait, MmrProof, keccak_hash_double, keccak_hash_single, verify_proof,
     };
+
+    /// Helper function to create an MMR proof for testing.
+    fn create_test_proof(
+        leaf_value: Hash256,
+        leaf_index: u32,
+        sibling_hashes: Array<Hash256>,
+        peaks: Array<Hash256>,
+        mmr_size: u32,
+    ) -> MmrProof {
+        MmrProof { leaf_index, leaf_value, sibling_hashes, peaks, mmr_size }
+    }
 
     #[test]
     #[available_gas(20000000)]
@@ -193,7 +199,7 @@ mod tests {
     #[test]
     #[available_gas(50000000)]
     fn test_hashing() {
-        let value1 = 100;
+        let value1 = Hash256 { low: 100, high: 0 };
 
         // Test single hash
         let hash1 = keccak_hash_single(value1);
@@ -201,7 +207,7 @@ mod tests {
         assert(hash1 == hash2, 'Same input must give same hash');
 
         // Test double hash
-        let hash3 = keccak_hash_single(200);
+        let hash3 = keccak_hash_single(Hash256 { low: 200, high: 0 });
         let combined = keccak_hash_double(hash1, hash3);
         assert(combined != hash1, 'Combined hash should differ');
     }
@@ -210,10 +216,7 @@ mod tests {
     #[available_gas(50000000)]
     fn test_large_hash_handling() {
         // Test with a hash that exceeds felt252 capacity
-        let large_u256 = u256 {
-            high: 0x123456789abcdef0123456789abcdef,
-            low: 0x1
-        };
+        let large_u256 = u256 { high: 0x123456789abcdef0123456789abcdef, low: 0x1 };
 
         let large_hash = Hash256Trait::from_u256(large_u256);
 
@@ -229,9 +232,9 @@ mod tests {
     #[test]
     #[available_gas(50000000)]
     fn test_verify_proof_success() {
-        let leaf_value = 42;
+        let leaf_value = Hash256 { low: 42, high: 0 };
         let leaf_hash = keccak_hash_single(leaf_value);
-        let sibling_hash = keccak_hash_single(84);
+        let sibling_hash = keccak_hash_single(Hash256 { low: 84, high: 0 });
         let peak_hash = keccak_hash_double(leaf_hash, sibling_hash);
 
         let mut sibling_hashes: Array<Hash256> = ArrayTrait::new();
@@ -244,7 +247,7 @@ mod tests {
         let mmr_size_hash = Hash256Trait::from_felt252(mmr_size.into());
         let root = keccak_hash_double(mmr_size_hash, peak_hash);
 
-        let proof = create_test_proof(leaf_value, 1, sibling_hashes, peaks, mmr_size,);
+        let proof = create_test_proof(leaf_value, 1, sibling_hashes, peaks, mmr_size);
 
         assert(verify_proof(leaf_value, proof, root), 'Proof should verify');
     }
@@ -252,9 +255,9 @@ mod tests {
     #[test]
     #[available_gas(50000000)]
     fn test_verify_proof_failures() {
-        let leaf_value = 42;
+        let leaf_value = Hash256 { low: 42, high: 0 };
         let leaf_hash = keccak_hash_single(leaf_value);
-        let sibling_hash = keccak_hash_single(84);
+        let sibling_hash = keccak_hash_single(Hash256 { low: 84, high: 0 });
         let peak_hash = keccak_hash_double(leaf_hash, sibling_hash);
 
         let mut sibling_hashes: Array<Hash256> = ArrayTrait::new();
@@ -265,19 +268,17 @@ mod tests {
 
         let mmr_size = 3_u32;
         let root = keccak_hash_double(Hash256Trait::from_felt252(mmr_size.into()), peak_hash);
-        let wrong_root = keccak_hash_single(999);
+        let wrong_root = keccak_hash_single(Hash256 { low: 999, high: 0 });
 
         // Test invalid leaf
         let proof_with_wrong_leaf = create_test_proof(
-            999, 1, sibling_hashes.clone(), peaks.clone(), mmr_size
+            Hash256 { low: 999, high: 0 }, 1, sibling_hashes.clone(), peaks.clone(), mmr_size,
         );
-        assert(
-            !verify_proof(leaf_value, proof_with_wrong_leaf, root), 'Wrong leaf should fail'
-        );
+        assert(!verify_proof(leaf_value, proof_with_wrong_leaf, root), 'Wrong leaf should fail');
 
         // Test invalid root
         let valid_proof = create_test_proof(
-            leaf_value, 1, sibling_hashes.clone(), peaks.clone(), mmr_size
+            leaf_value, 1, sibling_hashes.clone(), peaks.clone(), mmr_size,
         );
         assert(!verify_proof(leaf_value, valid_proof, wrong_root), 'Wrong root should fail');
     }
