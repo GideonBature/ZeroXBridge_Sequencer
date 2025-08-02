@@ -2,9 +2,9 @@ use core::keccak::keccak_u256s_be_inputs;
 
 /// A struct to handle full 256-bit hashes.
 #[derive(Drop, Copy, Serde, PartialEq)]
-struct Hash256 {
-    high: felt252,
-    low: felt252,
+pub struct Hash256 {
+    pub high: felt252,
+    pub low: felt252,
 }
 
 /// Trait for Hash256 operations.
