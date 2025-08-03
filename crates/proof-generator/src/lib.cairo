@@ -1,3 +1,4 @@
+mod l1;
 mod l2;
 
 /// Verifies a Merkle proof for a given leaf hash against an expected root hash
@@ -70,8 +71,8 @@ fn main(input: Array<felt252>) -> Array<felt252> {
 
 #[cfg(test)]
 mod tests {
+    use super::l2::verify_proof::{MmrProof, verify_proof};
     use super::verify_commitment_in_root;
-    use super::l2::verify_proof::{verify_proof, verify_proof_legacy, MmrProof};
 
     // Helper function to build a simple 4-leaf tree for tests
     fn build_test_tree() -> (felt252, felt252, felt252, felt252, felt252, felt252, felt252) {
