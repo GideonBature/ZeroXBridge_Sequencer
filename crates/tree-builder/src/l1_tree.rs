@@ -2,7 +2,7 @@ use std::{array::TryFromSliceError, sync::Arc};
 
 use accumulators::{
     hasher::keccak::KeccakHasher,
-    mmr::{Proof, MMR},
+    mmr::{MMR, Proof},
     store::memory::InMemoryStore,
 };
 

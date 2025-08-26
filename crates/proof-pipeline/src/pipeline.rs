@@ -1,9 +1,9 @@
 use std::{
-    io::{self, Write},
+    io,
     path::{Path, PathBuf},
     process::Command,
 };
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 
 #[derive(Debug)]
 pub enum ProofError {
@@ -37,11 +37,7 @@ pub struct ProofInputArgs {
     pub keep_temp_files: bool,
 }
 
-fn execute_command(
-    command: &str,
-    args: &[&str],
-    description: &str,
-) -> Result<(), ProofError> {
+fn execute_command(command: &str, args: &[&str], description: &str) -> Result<(), ProofError> {
     let output = Command::new(command)
         .args(args)
         .output()
@@ -60,9 +56,7 @@ fn execute_command(
     Ok(())
 }
 
-pub fn run_full_stone_pipeline(
-    args: ProofInputArgs,
-) -> Result<CalldataArtifacts, ProofError> {
+pub fn run_full_stone_pipeline(args: ProofInputArgs) -> Result<CalldataArtifacts, ProofError> {
     let temp_dir = tempdir().map_err(ProofError::Io)?;
     let temp_path = temp_dir.path();
     let target_dir = temp_path.join("target");
@@ -157,11 +151,7 @@ pub fn run_full_stone_pipeline(
             None,
         )
     } else {
-        (
-            calldata_dir,
-            proof_path.clone(),
-            Some(temp_dir),
-        )
+        (calldata_dir, proof_path.clone(), Some(temp_dir))
     };
 
     Ok(CalldataArtifacts {
