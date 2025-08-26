@@ -394,7 +394,7 @@ impl ProofSubmissionRelayer {
                 return Err(ProofSubmissionError::TransactionFailed(format!(
                     "Unknown function: {}",
                     function_name
-                )))
+                )));
             }
         };
 

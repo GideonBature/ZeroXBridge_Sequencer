@@ -1,13 +1,14 @@
-use axum::{extract::Query, http::StatusCode, response::IntoResponse, Extension, Json};
+use crate::db::database::{
+    Deposit, Withdrawal, fetch_all_withdrawals_by_user, fetch_latest_withdrawal_by_user,
+    fetch_pending_deposits, fetch_pending_withdrawals, get_or_create_nonce, get_user_deposits,
+    get_user_latest_deposit, insert_deposit, insert_deposit_with_l2_hash, insert_withdrawal,
+};
+use crate::utils::{BurnData, HashMethod, compute_poseidon_commitment_hash};
+use axum::{Extension, Json, extract::Query, http::StatusCode, response::IntoResponse};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{PgPool, Postgres, Transaction};
-use crate::utils::{compute_poseidon_commitment_hash, BurnData, HashMethod};
-use crate::db::database::{
-    fetch_all_withdrawals_by_user, fetch_latest_withdrawal_by_user, fetch_pending_deposits, get_user_deposits, Withdrawal, insert_deposit_with_l2_hash, Deposit,
-    fetch_pending_withdrawals, insert_deposit, insert_withdrawal, get_or_create_nonce, get_user_latest_deposit, 
-};
 
 use starknet::core::types::Felt;
 
@@ -111,7 +112,7 @@ pub async fn handle_deposit_post(
             return Err((
                 StatusCode::BAD_REQUEST,
                 "Invalid Starknet address format. Must be a valid hex format (0x...).".to_string(),
-            ))
+            ));
         }
     };
 
@@ -353,10 +354,10 @@ pub async fn compute_poseidon_hash(
             return Err((
                 StatusCode::BAD_REQUEST,
                 format!(
-                "Invalid hash method: '{}'. Valid options are 'BatchHash' or 'SequentialPairwise'",
-                method
-            ),
-            ))
+                    "Invalid hash method: '{}'. Valid options are 'BatchHash' or 'SequentialPairwise'",
+                    method
+                ),
+            ));
         }
     };
 

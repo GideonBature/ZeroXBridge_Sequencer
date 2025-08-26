@@ -7,7 +7,7 @@ pub mod l1_events_logs;
 pub mod l2_event_watcher;
 pub mod poseidon_test;
 pub mod proof_submission_integration_test;
-pub mod proof_submission_test;
+pub mod proof_submission;
 pub mod scarb_build;
 pub mod starknet_relayer_test;
 pub mod utils;

@@ -1,14 +1,14 @@
 use crate::{api::handlers::hello_world, config::AppConfig};
 use axum::{
-    routing::{get, post},
     Extension, Router,
+    routing::{get, post},
 };
 use sqlx::PgPool;
 
 use crate::api::handlers::{
-    compute_hash_handler, compute_poseidon_hash, create_withdrawal, get_all_withdrawals, fetch_user_deposits_handler,
-    get_latest_withdrawal, get_pending_withdrawals, handle_deposit_post, fetch_user_latest_deposit_handler,
-    handle_get_pending_deposits,
+    compute_hash_handler, compute_poseidon_hash, create_withdrawal, fetch_user_deposits_handler,
+    fetch_user_latest_deposit_handler, get_all_withdrawals, get_latest_withdrawal,
+    get_pending_withdrawals, handle_deposit_post, handle_get_pending_deposits,
 };
 
 #[derive(Clone)]

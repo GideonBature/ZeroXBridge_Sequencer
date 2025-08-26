@@ -5,7 +5,7 @@ use tracing::{error, info, trace, warn};
 
 use crate::{
     config::QueueConfig,
-    db::database::{fetch_pending_deposits, process_deposit_retry, update_deposit_status, Deposit},
+    db::database::{Deposit, fetch_pending_deposits, process_deposit_retry, update_deposit_status},
 };
 
 #[derive(Debug, thiserror::Error)]

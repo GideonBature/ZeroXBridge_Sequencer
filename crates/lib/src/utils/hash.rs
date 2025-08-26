@@ -1,5 +1,5 @@
 use sha3::{Digest, Keccak256};
-use starknet_crypto::{poseidon_hash, Felt, PoseidonHasher};
+use starknet_crypto::{Felt, PoseidonHasher, poseidon_hash};
 
 /// Data structure representing the burn data to be hashed
 #[derive(Debug, Clone)]

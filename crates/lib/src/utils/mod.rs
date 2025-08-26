@@ -1,3 +1,3 @@
 pub mod hash;
 
-pub use hash::{compute_poseidon_commitment_hash, BurnData, HashMethod, MintData};
+pub use hash::{BurnData, HashMethod, MintData, compute_poseidon_commitment_hash};

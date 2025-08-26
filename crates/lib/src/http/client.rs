@@ -1,6 +1,6 @@
 use anyhow::Result;
-use reqwest::multipart::{Form, Part};
 use reqwest::Client;
+use reqwest::multipart::{Form, Part};
 use std::env;
 use std::fs;
 

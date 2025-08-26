@@ -3,8 +3,8 @@ use anyhow::Result;
 use sqlx::PgPool;
 use tracing::log::{debug, warn};
 
-use std::str::FromStr;
 use async_trait::async_trait;
+use std::str::FromStr;
 
 use alloy::{
     primitives::Address,
@@ -21,7 +21,12 @@ pub const DEPOSIT_HASH_BLOCK_TRACKER_KEY: &str = "l1_deposit_hash_events_last_bl
 // Trait for testable Ethereum provider
 #[async_trait]
 pub trait TestEthereumProvider: Send + Sync {
-    fn get_logs(&self, filter: &Filter) -> impl std::future::Future<Output = Result<Vec<alloy::rpc::types::Log>, Box<dyn std::error::Error + Send + Sync>>> + Send;
+    fn get_logs(
+        &self,
+        filter: &Filter,
+    ) -> impl std::future::Future<
+        Output = Result<Vec<alloy::rpc::types::Log>, Box<dyn std::error::Error + Send + Sync>>,
+    > + Send;
 }
 
 // Implementation for real Ethereum provider
@@ -37,7 +42,12 @@ impl RealEthereumProvider {
 
 #[async_trait]
 impl TestEthereumProvider for RealEthereumProvider {
-    fn get_logs(&self, filter: &Filter) -> impl std::future::Future<Output = Result<Vec<alloy::rpc::types::Log>, Box<dyn std::error::Error + Send + Sync>>> + Send {
+    fn get_logs(
+        &self,
+        filter: &Filter,
+    ) -> impl std::future::Future<
+        Output = Result<Vec<alloy::rpc::types::Log>, Box<dyn std::error::Error + Send + Sync>>,
+    > + Send {
         let rpc_url = self.rpc_url.clone();
         let filter = filter.clone();
         async move {

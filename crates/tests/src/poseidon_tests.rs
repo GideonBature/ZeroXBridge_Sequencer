@@ -1,4 +1,4 @@
-use starknet_crypto::{poseidon_hash, poseidon_hash_many, Felt, PoseidonHasher};
+use starknet_crypto::{Felt, PoseidonHasher, poseidon_hash, poseidon_hash_many};
 
 #[tokio::test]
 async fn main() {

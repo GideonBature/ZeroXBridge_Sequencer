@@ -10,8 +10,8 @@ use alloy::sol_types::SolEvent;
 mod tests {
     use super::*;
     use dotenv::dotenv;
-    use sqlx::postgres::PgPoolOptions;
     use sqlx::PgPool;
+    use sqlx::postgres::PgPoolOptions;
 
     // Helper function to create test database pool
     async fn setup_test_db() -> Result<PgPool> {

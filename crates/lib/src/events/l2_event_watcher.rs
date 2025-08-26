@@ -1,6 +1,6 @@
 use crate::config::AppConfig;
 use crate::db::database::{get_last_processed_block, update_last_processed_block};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use starknet::core::types::{BlockId, EventFilter, EventsPage, Felt};

@@ -1,8 +1,8 @@
 use crate::config::RelayerConfig;
 use alloy_json_rpc::RpcError;
-use alloy_primitives::{hex, Address, U256};
+use alloy_primitives::{Address, U256, hex};
 use alloy_rpc_client::{ClientBuilder, RpcClient};
-use alloy_sol_types::{sol, SolCall};
+use alloy_sol_types::{SolCall, sol};
 use sqlx::{PgConnection, PgPool};
 use std::time::Duration;
 use thiserror::Error;
@@ -254,8 +254,10 @@ impl EthereumRelayer {
                     return Ok(());
                 }
                 Err(e) => {
-                    warn!("Failed to send transaction for withdrawal {}: {:?}. Retrying in {} seconds...", 
-                          withdrawal.withdrawal_id, e, self.config.retry_delay_seconds);
+                    warn!(
+                        "Failed to send transaction for withdrawal {}: {:?}. Retrying in {} seconds...",
+                        withdrawal.withdrawal_id, e, self.config.retry_delay_seconds
+                    );
 
                     retry_count += 1;
                     if retry_count < self.config.max_retries {

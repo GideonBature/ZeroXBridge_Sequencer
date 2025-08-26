@@ -57,10 +57,12 @@ mod tests {
     ) -> EmittedEvent {
         EmittedEvent {
             from_address: Felt::from_hex("0x456").unwrap(),
-            keys: vec![Felt::from_hex(
-                "0x0099de3f38fed0a76764f614c6bc2b958814813685abc1af6deedab612df44f3",
-            )
-            .unwrap()],
+            keys: vec![
+                Felt::from_hex(
+                    "0x0099de3f38fed0a76764f614c6bc2b958814813685abc1af6deedab612df44f3",
+                )
+                .unwrap(),
+            ],
             data: vec![
                 Felt::from_hex(user).unwrap(),
                 Felt::from_hex(amount_low).unwrap(),

@@ -2,7 +2,7 @@ use std::{array::TryFromSliceError, sync::Arc};
 
 use accumulators::{
     hasher::stark_poseidon,
-    mmr::{Proof, MMR},
+    mmr::{MMR, Proof},
     store::memory::InMemoryStore,
 };
 

@@ -1,5 +1,5 @@
 pub mod pipeline;
-use crate::pipeline::{run_full_stone_pipeline, ProofError, ProofInputArgs};
+use crate::pipeline::{ProofError, ProofInputArgs, run_full_stone_pipeline};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -8,28 +8,28 @@ use structopt::StructOpt;
 struct Cli {
     #[structopt(long)]
     sierra_path: PathBuf,
-    
+
     #[structopt(long)]
     inputs_path: PathBuf,
-    
+
     #[structopt(long, default_value = "prover_params.json")]
     prover_params: PathBuf,
-    
+
     #[structopt(long, default_value = "prover_config.json")]
     prover_config: PathBuf,
-    
+
     #[structopt(long, default_value = "recursive_with_poseidon")]
     layout: String,
-    
+
     #[structopt(long, default_value = "keccak_160_lsb")]
     hasher: String,
-    
+
     #[structopt(long, default_value = "stone6")]
     stone_version: String,
-    
+
     #[structopt(long)]
     verify: bool,
-    
+
     #[structopt(long)]
     keep_temp_files: bool,
 }
@@ -39,7 +39,7 @@ fn main() -> Result<(), ProofError> {
     log::info!("Starting STARK proof generation pipeline");
 
     let args = Cli::from_args();
-    
+
     let inputs = std::fs::read_to_string(&args.inputs_path)?;
     let program_inputs = serde_json::from_str(&inputs)?;
 
